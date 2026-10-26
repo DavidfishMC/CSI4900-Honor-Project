@@ -55,8 +55,12 @@ if st.button("Analyze email", type="primary") and email.strip():
 
 with st.sidebar:
     st.header("Roadmap")
-    st.markdown("- Trained ML model (DistilBERT + Random Forest)\n"
-                "- VirusTotal / AbuseIPDB link checks\n"
-                "- Automated response (SOAR)\n"
+    st.markdown("- Trained ML model (DistilBERT, Sentence-BERT?, Deep Neural Network?, TF-IDF? + Random Forest, XGBoost?, SVM?)\n"
+                "- VirusTotal / AbuseIPDB API link checks, .eml` upload (SPF/DKIM/DMARC)?\n"
+                "- App features such as Streamlit, wire in trained model into website backend\n"
+                "- Security layer like Automated response (SOAR) with Shuffle, ATT&CK Severity Score and Sigma Rules, ansible playbooks?\n"
                 "- Elasticsearch logging + Kibana dashboard\n"
-                "- Dockerized deployment")
+                "- Infrastructure such as Dockerized deployment with Docker, Github Actions, Ubuntu VM, Terraform with AWS S3 + IAM\n"
+                "- CI: GitHub Actions (pytest, ruff, Bandit, pip-audit, Trivy), CD: Actions builds the image and pushes it to ghcr.io, and Ansible pulls and runs it on the VM\n"
+                "- Unlikely Features/In Consideration: FastAPI backend + TypeScript, GoPhish Pen Testing, RAG")
+    
