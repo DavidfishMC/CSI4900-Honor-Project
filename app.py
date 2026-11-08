@@ -1,5 +1,49 @@
 import streamlit as st
 from src.detector import load_model, analyze
+import re
+
+def extract_features(subject, body, has_attachment, att_type, day, hr, device):
+    full_text = f"{subject} {body}"
+    
+    # Text metric calculations
+    email_length = len(full_text)
+    words = full_text.split()
+    word_count = len(words)
+    reading_time_minutes = round(word_count / 200, 2)
+    
+    # Link detection
+    urls = re.findall(r'https?://[^\s]+|www\.[^\s]+', full_text)
+    num_links = len(urls)
+    contains_link = 1 if num_links > 0 else 0
+    
+    # Attachment mappings (converting boolean checkbox to 1/0)
+    att_flag = 1 if has_attachment else 0
+    final_att_type = att_type if has_attachment else 'None'
+    
+    # Character and casing stats
+    num_special_characters = len(re.findall(r'[^a-zA-Z0-9\s]', full_text))
+    num_uppercase_words = sum(1 for w in words if w.isupper() and len(w) > 1)
+    
+    # Build the feature dictionary
+    sample = {
+        'subject': subject,
+        'email_body': body,
+        'contains_link': contains_link,
+        'contains_attachment': att_flag,
+        'attachment_type': final_att_type,
+        'email_length': email_length,
+        'word_count': word_count,
+        'reading_time_minutes': reading_time_minutes,
+        'num_links': num_links,
+        'num_special_characters': num_special_characters,
+        'num_uppercase_words': num_uppercase_words,
+        'day_of_week': day,
+        'hour': hr,
+        'device_type': device,
+        'email_client': 'Webmail'
+    }
+    
+    return sample
 
 st.set_page_config(page_title="Phishing Email Detector", page_icon="🎣")
 st.title("🎣 Phishing Email Detector")
@@ -23,34 +67,28 @@ def get_model():
 model = get_model()
 
 subject = st.text_input("Enter Email Subject Line", placeholder="e.g., URGENT: Verify your account")
-email_body = st.text_area("Email content", height=220, placeholder="Paste the body of the email here...")
+email_body = st.text_area("Enter Email Content", height=220, placeholder="Paste the body of the email here. Keep all links, do not worry about adding attachements.")
 email = f"Subject: {subject}\n\n{email_body}" if subject else email_body
 
-if st.button("Analyze email", type="primary") and email.strip():
-    r = analyze(email)
+contains_attachment = st.checkbox("Include Attachment")
+attachment_type = 'None'
+if contains_attachment:
+    attachment_type = st.selectbox("Attachment Type", ["pdf", "docx", "zip", "exe"])
 
-    if r["label"] == "phishing":
-        st.error("⚠️ Likely phishing")
-    else:
-        st.success("✅ Looks safe")
+col1, col2, col3 = st.columns(3)
+with col1:
+    day_of_week = st.selectbox("Day of Week", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]) 
+with col2:
+    hour = st.selectbox("Hour", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]) 
+with col3:
+    device_type = st.selectbox("Device Type", ["Desktop"])
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Risk score", f"{r['score']}/100")
-    c2.metric("Severity", r["severity"])
-    c3.metric("MITRE ATT&CK", r["attack_tag"].split(" ")[0])
-    st.caption(f"ATT&CK technique: {r['attack_tag']}")
-
-    st.subheader("Why it was flagged")
-    if r["signals"]:
-        st.table({"Signal": list(r["signals"].keys()),
-                  "Detail": [str(v) for v in r["signals"].values()]})
-    else:
-        st.write("No suspicious signals found.")
-
-    if r["urls"]:
-        st.subheader("Links found")
-        for u in r["urls"]:
-            st.code(u)
+if st.button("Analyze email", type="primary") and email_body.strip():
+    sample_features = extract_features(
+        subject, email_body, contains_attachment, attachment_type, 
+        day_of_week, hour, device_type
+    )
+    st.write("Calculated Features Dictionary:", sample_features)
 
 with st.sidebar:
     st.header("Roadmap")
