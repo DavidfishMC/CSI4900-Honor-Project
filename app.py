@@ -22,10 +22,9 @@ def get_model():
 
 model = get_model()
 
-choice = st.selectbox("Load a sample email", ["(paste your own)"] + list(SAMPLES))
-default = SAMPLES.get(choice, "")
-email = st.text_area("Email content", value=default, height=220,
-                     key=f"email_{choice}")
+subject = st.text_input("Enter Email Subject Line", placeholder="e.g., URGENT: Verify your account")
+email_body = st.text_area("Email content", height=220, placeholder="Paste the body of the email here...")
+email = f"Subject: {subject}\n\n{email_body}" if subject else email_body
 
 if st.button("Analyze email", type="primary") and email.strip():
     r = analyze(email)
