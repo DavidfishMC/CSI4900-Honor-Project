@@ -1,6 +1,6 @@
-import streamlit as st
-from src.detector import load_model, analyze
 import re
+import streamlit as st
+from src.detector import load_model
 
 def extract_features(subject, body, has_attachment, att_type, day, hr, device):
     full_text = f"{subject} {body}"
