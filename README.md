@@ -1,6 +1,8 @@
 # CSI4900-Honor-Project
 Repository containing the code and files for the phishing AI model and web app.
 
+Dataset used was retrieved from Kaggle.
+
 PROJECT ROADMAP
 
 Phase 1: Data and ML (partner)
