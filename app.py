@@ -81,7 +81,7 @@ with col1:
 with col2:
     hour = st.selectbox("Hour", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]) 
 with col3:
-    device_type = st.selectbox("Device Type", ["Desktop"])
+    device_type = st.selectbox("Device Type", ["Desktop", "Mobile"])
 
 if st.button("Analyze email", type="primary") and email_body.strip():
     sample_features = extract_features(
