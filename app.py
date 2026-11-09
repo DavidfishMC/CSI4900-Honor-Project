@@ -94,7 +94,21 @@ with col3:
 with col4:
     email_client = st.selectbox("Email Client Received On", ["Thunderbird", "Gmail", "Apple Mail", "Yahoo Mail", "Outlook"])
 
-if st.button("Analyze Email", type="primary") and email_body.strip():
+btn_col, msg_col = st.columns([1, 2])
+
+with btn_col:
+    analyze_clicked = st.button("Analyze email", type="primary")
+
+with msg_col:
+    if analyze_clicked:
+        if not subject.strip() and not email_body.strip():
+            st.error("⚠️ Please enter a subject line and email content, and double-check your other inputs!")
+        elif not subject.strip():
+            st.error("⚠️ Please enter a subject line, and double-check your other inputs!")
+        elif not email_body.strip():
+            st.error("⚠️ Please enter email content, and double-check your other inputs!")
+
+if analyze_clicked and subject.strip() and email_body.strip():
     sample_features = extract_features(
         subject, email_body, contains_attachment, attachment_type, 
         day_of_week, hour, device_type, email_client
