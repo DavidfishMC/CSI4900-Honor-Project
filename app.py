@@ -2,6 +2,41 @@ import re
 import streamlit as st
 from src.detector import load_model
 
+def check_virustotal_links(urls):
+    """
+    Checks each URL against VirusTotal. 
+    Returns True if any URL is flagged as malicious, False otherwise.
+    Note: Replace 'YOUR_VIRUSTOTAL_API_KEY' with your actual API key or environment variable.
+    """
+    API_KEY = "YOUR_VIRUSTOTAL_API_KEY"
+    headers = {"x-apikey": API_KEY}
+
+    if API_KEY == "YOUR_VIRUSTOTAL_API_KEY":
+        return False
+    
+    for url in urls:
+        # VirusTotal v3 URL submission/analysis endpoint requires base64 encoding without padding
+        import base64
+        url_id = base64.urlsafe_b64encode(url.encode()).decode().strip("=")
+        endpoint = f"https://www.virustotal.com/api/v3/urls/{url_id}"
+        
+        try:
+            response = requests.get(endpoint, headers=headers, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                stats = data.get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
+                malicious_count = stats.get("malicious", 0)
+                suspicious_count = stats.get("suspicious", 0)
+                
+                # If VirusTotal flags it as malicious or suspicious
+                if malicious_count > 0 or suspicious_count > 0:
+                    return True
+        except Exception:
+            # Handle connection/timeout errors gracefully if offline or rate-limited
+            pass
+            
+    return False
+
 def extract_features(subject, body, has_attachment, att_type, day, hr, device, client):
     full_text = f"{subject} {body}".strip() if subject else body.strip()
     
@@ -112,11 +147,21 @@ with msg_col:
             st.error("⚠️ Please enter email content, and double-check your other inputs!")
 
 if analyze_clicked and subject.strip() and email_body.strip():
-    sample_features = extract_features(
-        subject, email_body, contains_attachment, attachment_type, 
-        day_of_week, hour, device_type, email_client
-    )
-    st.write("Calculated Features Dictionary:", sample_features)
+    # Extract links from the combined text first
+    combined_text = f"{subject} {email_body}"
+    extracted_urls = re.findall(r'https?://[^\s]+|www\.[^\s]+', combined_text)
+    
+    # Check links against VirusTotal before running feature extraction or ML prediction
+    vt_flagged = check_virustotal_links(extracted_urls) if extracted_urls else False
+    
+    if vt_flagged:
+        st.error("**Threat Detected:** VirusTotal flagged one or more links in this email as malicious. **Email is 100% phishing!**")
+    else:
+        sample_features = extract_features(
+            subject, email_body, contains_attachment, attachment_type, 
+            day_of_week, hour, device_type, email_client
+        )
+        st.write("Calculated Features Dictionary:", sample_features)
 
 with st.sidebar:
     st.header("Roadmap")
