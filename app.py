@@ -47,8 +47,7 @@ def extract_features(subject, body, has_attachment, att_type, day, hr, device):
 
 st.set_page_config(page_title="Phishing Email Detector", page_icon="🎣")
 st.title("🎣 Phishing Email Detector")
-st.caption("Prototype v0: rule-based scoring. Trained ML model integration "
-           "(DistilBERT + Random Forest) is in progress.")
+st.caption("Think your email might be phishing? Input the email's information in the provided fields to find out!")
 
 SAMPLES = {
     "Fake bank alert": "URGENT: Your account suspended. Verify your account now: "
@@ -70,18 +69,18 @@ subject = st.text_input("Enter Email Subject Line", placeholder="e.g., URGENT: V
 email_body = st.text_area("Enter Email Content", height=220, placeholder="Paste the body of the email here. Keep all links, do not worry about adding attachements.")
 email = f"Subject: {subject}\n\n{email_body}" if subject else email_body
 
-contains_attachment = st.checkbox("Include Attachment")
+contains_attachment = st.checkbox("Select if your email contains a File Attachment")
 attachment_type = 'None'
 if contains_attachment:
-    attachment_type = st.selectbox("Attachment Type", ["pdf", "docx", "zip", "exe"])
+    attachment_type = st.selectbox("Provide the file type of one of the Attachment(s)", ["pdf", "docx", "zip", "exe"])
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    day_of_week = st.selectbox("Day of Week", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]) 
+    day_of_week = st.selectbox("Day of Week Sent", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]) 
 with col2:
-    hour = st.selectbox("Hour", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]) 
+    hour = st.selectbox("Hour Sent", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]) 
 with col3:
-    device_type = st.selectbox("Device Type", ["Desktop", "Mobile"])
+    device_type = st.selectbox("Device Received On", ["Laptop", "Desktop", "Mobile", "Tablet"])
 
 if st.button("Analyze email", type="primary") and email_body.strip():
     sample_features = extract_features(
