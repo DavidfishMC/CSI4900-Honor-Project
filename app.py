@@ -2,14 +2,17 @@ import re
 import streamlit as st
 from src.detector import load_model
 
+import base64
+import requests
+import streamlit as st
+
 def check_virustotal_links(urls):
-    # Pulls the key securely from Streamlit secrets
     API_KEY = st.secrets["VIRUSTOTAL_API_KEY"]
     headers = {"x-apikey": API_KEY}
     
     for url in urls:
-        import base64
-        url_id = base64.urlsafe_b64encode(url.encode()).decode().strip("=")
+        # Generate raw URL-safe Base64 string without trailing '='
+        url_id = base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
         endpoint = f"https://www.virustotal.com/api/v3/urls/{url_id}"
         
         try:
@@ -17,10 +20,15 @@ def check_virustotal_links(urls):
             if response.status_code == 200:
                 data = response.json()
                 stats = data.get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
+                
+                # Triggers on malicious or suspicious ratings
                 if stats.get("malicious", 0) > 0 or stats.get("suspicious", 0) > 0:
                     return True
-        except Exception:
-            pass
+            else:
+                # Useful debug output if VirusTotal returns non-200 (e.g. 404 unindexed URL)
+                st.write(f"VT API Status: {response.status_code} for URL: {url}")
+        except Exception as e:
+            st.write(f"VT API Error: {e}")
             
     return False
 
@@ -28,7 +36,7 @@ def extract_features(subject, body, has_attachment, att_type, day, hr, device, c
     full_text = f"{subject} {body}".strip() if subject else body.strip()
     
     # Text metric calculations
-    email_length = len(full_text)
+    email_length = len(body)
     
     # Count words based exclusively on the email body content
     body_words = body.split() if body else []
