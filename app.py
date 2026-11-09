@@ -3,7 +3,7 @@ import streamlit as st
 from src.detector import load_model
 
 def extract_features(subject, body, has_attachment, att_type, day, hr, device, client):
-    full_text = f"{subject} {body}"
+    full_text = f"{subject} {body}".strip() if subject else body.strip()
     
     # Text metric calculations
     email_length = len(full_text)
@@ -74,11 +74,21 @@ attachment_type = 'None'
 if contains_attachment:
     attachment_type = st.selectbox("Provide the file type of one of the Attachment(s)", ["pdf", "docx", "zip", "exe"])
 
+hour_options = {
+    "12:00 AM (Midnight)": 0, "1:00 AM": 1, "2:00 AM": 2, "3:00 AM": 3,
+    "4:00 AM": 4, "5:00 AM": 5, "6:00 AM": 6, "7:00 AM": 7,
+    "8:00 AM": 8, "9:00 AM": 9, "10:00 AM": 10, "11:00 AM": 11,
+    "12:00 PM (Noon)": 12, "1:00 PM": 13, "2:00 PM": 14, "3:00 PM": 15,
+    "4:00 PM": 16, "5:00 PM": 17, "6:00 PM": 18, "7:00 PM": 19,
+    "8:00 PM": 20, "9:00 PM": 21, "10:00 PM": 22, "11:00 PM": 23
+}
+
 col1, col2, col3, col4 = st.columns(4)
 with col1:
     day_of_week = st.selectbox("Day of Week Sent", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]) 
 with col2:
-    hour = st.selectbox("Hour Sent", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]) 
+    selected_hour_label = st.selectbox("Hour Sent", list(hour_options.keys()))
+    hour = hour_options[selected_hour_label]
 with col3:
     device_type = st.selectbox("Device Received On", ["Laptop", "Desktop", "Mobile", "Tablet"])
 with col4:
