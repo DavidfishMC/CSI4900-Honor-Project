@@ -2,7 +2,7 @@ import re
 import streamlit as st
 from src.detector import load_model
 
-def extract_features(subject, body, has_attachment, att_type, day, hr, device):
+def extract_features(subject, body, has_attachment, att_type, day, hr, device, client):
     full_text = f"{subject} {body}"
     
     # Text metric calculations
@@ -87,7 +87,7 @@ with col4:
 if st.button("Analyze Email", type="primary") and email_body.strip():
     sample_features = extract_features(
         subject, email_body, contains_attachment, attachment_type, 
-        day_of_week, hour, device_type
+        day_of_week, hour, device_type, email_client
     )
     st.write("Calculated Features Dictionary:", sample_features)
 
