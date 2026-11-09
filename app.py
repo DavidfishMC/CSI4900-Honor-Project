@@ -8,7 +8,7 @@ def extract_features(subject, body, has_attachment, att_type, day, hr, device, c
     # Text metric calculations
     email_length = len(full_text)
     words = full_text.split()
-    word_count = len(words)
+    word_count = len(body_words)
     reading_time_minutes = round(word_count / 200, 2)
     
     # Link detection
