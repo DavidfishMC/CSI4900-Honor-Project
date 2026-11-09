@@ -11,24 +11,17 @@ def check_virustotal_links(urls):
     headers = {"x-apikey": API_KEY}
     
     for url in urls:
-        # Generate raw URL-safe Base64 string without trailing '='
         url_id = base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
         endpoint = f"https://www.virustotal.com/api/v3/urls/{url_id}"
         
         try:
             response = requests.get(endpoint, headers=headers, timeout=5)
             if response.status_code == 200:
-                data = response.json()
-                stats = data.get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
-                
-                # Triggers on malicious or suspicious ratings
+                stats = response.json().get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
                 if stats.get("malicious", 0) > 0 or stats.get("suspicious", 0) > 0:
                     return True
-            else:
-                # Useful debug output if VirusTotal returns non-200 (e.g. 404 unindexed URL)
-                st.write(f"VT API Status: {response.status_code} for URL: {url}")
-        except Exception as e:
-            st.write(f"VT API Error: {e}")
+        except Exception:
+            pass # Fail silently or handle gracefully without UI popups
             
     return False
 
