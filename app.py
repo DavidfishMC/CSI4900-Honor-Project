@@ -40,7 +40,7 @@ def extract_features(subject, body, has_attachment, att_type, day, hr, device):
         'day_of_week': day,
         'hour': hr,
         'device_type': device,
-        'email_client': 'Webmail'
+        'email_client': client
     }
     
     return sample
@@ -74,15 +74,17 @@ attachment_type = 'None'
 if contains_attachment:
     attachment_type = st.selectbox("Provide the file type of one of the Attachment(s)", ["pdf", "docx", "zip", "exe"])
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 with col1:
     day_of_week = st.selectbox("Day of Week Sent", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]) 
 with col2:
     hour = st.selectbox("Hour Sent", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]) 
 with col3:
     device_type = st.selectbox("Device Received On", ["Laptop", "Desktop", "Mobile", "Tablet"])
+with col4:
+    email_client = st.selectbox("Email Client Received On", ["Thunderbird", "Gmail", "Apple Mail", "Yahoo Mail", "Outlook"])
 
-if st.button("Analyze email", type="primary") and email_body.strip():
+if st.button("Analyze Email", type="primary") and email_body.strip():
     sample_features = extract_features(
         subject, email_body, contains_attachment, attachment_type, 
         day_of_week, hour, device_type
