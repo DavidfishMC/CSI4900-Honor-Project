@@ -6,34 +6,29 @@ import base64
 import requests
 import streamlit as st
 
-import base64
-import requests
-import streamlit as st
-
 def check_virustotal_links(urls):
     API_KEY = st.secrets["VIRUSTOTAL_API_KEY"]
     headers = {"x-apikey": API_KEY}
     
     for url in urls:
+        # Generate raw URL-safe Base64 string without trailing '='
         url_id = base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
         endpoint = f"https://www.virustotal.com/api/v3/urls/{url_id}"
         
         try:
             response = requests.get(endpoint, headers=headers, timeout=5)
-            
-            # Temporary UI debug output
-            with st.expander(f"VT Debug Log: {url}", expanded=True):
-                st.write(f"**HTTP Status Code:** {response.status_code}")
-                if response.status_code == 200:
-                    stats = response.json().get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
-                    st.json(stats)
-                    if stats.get("malicious", 0) > 0 or stats.get("suspicious", 0) > 0:
-                        return True
-                else:
-                    st.warning(f"VirusTotal could not find or scan this URL (HTTP {response.status_code}).")
-                    
+            if response.status_code == 200:
+                data = response.json()
+                stats = data.get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
+                
+                # Triggers on malicious or suspicious ratings
+                if stats.get("malicious", 0) > 0 or stats.get("suspicious", 0) > 0:
+                    return True
+            else:
+                # Useful debug output if VirusTotal returns non-200 (e.g. 404 unindexed URL)
+                st.write(f"VT API Status: {response.status_code} for URL: {url}")
         except Exception as e:
-            st.error(f"VirusTotal Request Exception: {e}")
+            st.write(f"VT API Error: {e}")
             
     return False
 
