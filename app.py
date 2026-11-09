@@ -7,7 +7,7 @@ def extract_features(subject, body, has_attachment, att_type, day, hr, device, c
     
     # Text metric calculations
     email_length = len(full_text)
-    words = full_text.split()
+    body_words = body.split() if body else []
     word_count = len(body_words)
     reading_time_minutes = round(word_count / 200, 2)
     
