@@ -7,8 +7,11 @@ def extract_features(subject, body, has_attachment, att_type, day, hr, device, c
     
     # Text metric calculations
     email_length = len(full_text)
+    
+    # Count words based exclusively on the email body content
     body_words = body.split() if body else []
     word_count = len(body_words)
+    
     reading_time_minutes = round(word_count / 200, 2)
     
     # Link detection
@@ -22,7 +25,7 @@ def extract_features(subject, body, has_attachment, att_type, day, hr, device, c
     
     # Character and casing stats
     num_special_characters = len(re.findall(r'[^a-zA-Z0-9\s]', full_text))
-    num_uppercase_words = sum(1 for w in words if w.isupper() and len(w) > 1)
+    num_uppercase_words = sum(1 for w in body_words if w.isupper() and len(w) > 1)
     
     # Build the feature dictionary
     sample = {
