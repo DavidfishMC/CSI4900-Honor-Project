@@ -7,3 +7,4 @@ data/
 *.csv
 models/*.joblib
 .ipynb_checkpoints/
+.streamlit/

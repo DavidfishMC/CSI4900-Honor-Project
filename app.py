@@ -3,19 +3,11 @@ import streamlit as st
 from src.detector import load_model
 
 def check_virustotal_links(urls):
-    """
-    Checks each URL against VirusTotal. 
-    Returns True if any URL is flagged as malicious, False otherwise.
-    Note: Replace 'YOUR_VIRUSTOTAL_API_KEY' with your actual API key or environment variable.
-    """
-    API_KEY = "YOUR_VIRUSTOTAL_API_KEY"
+    # Pulls the key securely from Streamlit secrets
+    API_KEY = st.secrets["VIRUSTOTAL_API_KEY"]
     headers = {"x-apikey": API_KEY}
-
-    if API_KEY == "YOUR_VIRUSTOTAL_API_KEY":
-        return False
     
     for url in urls:
-        # VirusTotal v3 URL submission/analysis endpoint requires base64 encoding without padding
         import base64
         url_id = base64.urlsafe_b64encode(url.encode()).decode().strip("=")
         endpoint = f"https://www.virustotal.com/api/v3/urls/{url_id}"
@@ -25,14 +17,9 @@ def check_virustotal_links(urls):
             if response.status_code == 200:
                 data = response.json()
                 stats = data.get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
-                malicious_count = stats.get("malicious", 0)
-                suspicious_count = stats.get("suspicious", 0)
-                
-                # If VirusTotal flags it as malicious or suspicious
-                if malicious_count > 0 or suspicious_count > 0:
+                if stats.get("malicious", 0) > 0 or stats.get("suspicious", 0) > 0:
                     return True
         except Exception:
-            # Handle connection/timeout errors gracefully if offline or rate-limited
             pass
             
     return False
