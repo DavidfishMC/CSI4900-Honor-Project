@@ -11,7 +11,7 @@ def load_artifacts():
     model = joblib.load('phishing_ensemble_model.pkl')
     selector = joblib.load('selector.pkl')
     selector_mi = joblib.load('selector_mi.pkl')
-    all_cols = pd.read_csv("x_hybrid_final_50k.csv", nrows=0).columns
+    all_cols = pd.read_csv("x_columns_only.csv", nrows=0).columns
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
