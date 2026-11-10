@@ -1,10 +1,66 @@
 import re
 import streamlit as st
 from src.detector import load_model
+import joblib
 
 import base64
 import requests
-import streamlit as st
+
+@st.cache_resource
+def load_artifacts():
+    model = joblib.load('phishing_ensemble_model.pkl')
+    selector = joblib.load('selector.pkl')
+    selector_mi = joblib.load('selector_mi.pkl')
+    all_cols = pd.read_csv("x_hybrid_final_50k.csv", nrows=0).columns
+    
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
+    b_model = DistilBertModel.from_pretrained('distilbert-base-uncased').to(device)
+    b_model.eval()
+    
+    return model, selector, selector_mi, all_cols, tokenizer, b_model, device
+
+model, selector, selector_mi, all_cols, tokenizer, b_model, device = load_artifacts()
+
+def classify_email(subject, email_body, contains_attachment, attachment_type, day_of_week, hour, device_type, email_client):
+    # Calculate text metrics dynamically
+    email_length = len(subject) + len(email_body)
+    word_count = len((subject + " " + email_body).split())
+    reading_time_minutes = word_count / 200.0
+    num_links = len(re.findall(r'https?://[^\s]+|www\.[^\s]+', email_body))
+    num_special_characters = sum(1 for c in (subject + email_body) if not c.isalnum() and not c.isspace())
+    num_uppercase_words = sum(1 for w in (subject + email_body).split() if w.isupper())
+    contains_link = 1 if num_links > 0 else 0
+
+    sample = {
+        'subject': subject, 'email_body': email_body,
+        'contains_link': contains_link, 'contains_attachment': 1 if contains_attachment else 0,
+        'attachment_type': attachment_type, 'email_length': email_length,
+        'word_count': word_count, 'reading_time_minutes': reading_time_minutes,
+        'num_links': num_links, 'num_special_characters': num_special_characters,
+        'num_uppercase_words': num_uppercase_words, 'day_of_week': day_of_week,
+        'hour': hour, 'device_type': device_type, 'email_client': email_client
+    }
+
+    df_s = pd.get_dummies(pd.DataFrame([sample]), drop_first=True)
+    tabular_cols = [c for c in all_cols if not c.startswith("bert_")]
+    df_s = df_s.reindex(columns=tabular_cols, fill_value=0)
+
+    text = [(subject + " " + email_body)]
+    inputs = tokenizer(text, padding=True, truncation=True, max_length=128, return_tensors="pt").to(device)
+    with torch.no_grad():
+        b_emb = b_model(**inputs).last_hidden_state[:, 0, :].cpu().numpy()
+
+    b_df = pd.DataFrame(b_emb, columns=[f"bert_{i}" for i in range(768)])
+
+    X_raw_combined = pd.concat([df_s.reset_index(drop=True), b_df], axis=1)
+    X_raw_combined = X_raw_combined.reindex(columns=all_cols, fill_value=0)
+
+    X_var_filtered = selector.transform(X_raw_combined) 
+    X_sample = selector_mi.transform(X_var_filtered)         
+
+    probs = model.predict_proba(X_sample)[0]
+    return probs[1] # Phishing probability
 
 def check_virustotal_links(urls):
     API_KEY = st.secrets["VIRUSTOTAL_API_KEY"]
@@ -86,10 +142,10 @@ SAMPLES = {
 }
 
 @st.cache_resource
-def get_model():
-    return load_model()
+def load_model():
+    return joblib.load('phishing_ensemble_model.pkl')
 
-model = get_model()
+model = load_model()
 
 subject = st.text_input("Enter Email Subject Line", placeholder="e.g., URGENT: Verify your account")
 email_body = st.text_area("Enter Email Content", height=220, placeholder="Paste the body of the email here. Keep all links, do not worry about adding attachements.")
@@ -143,13 +199,20 @@ if analyze_clicked and subject.strip() and email_body.strip():
     vt_flagged = check_virustotal_links(extracted_urls) if extracted_urls else False
     
     if vt_flagged:
-        st.error("**Threat Detected:** VirusTotal flagged one or more links in this email as malicious. **Email is 100% phishing!**")
+        st.error("**Threat Detected:** VirusTotal flagged one or more links in this email as malicious. This email is classified as **Phishing** with a **100%** probability.")
     else:
-        sample_features = extract_features(
+        phishing_prob = classify_email(
             subject, email_body, contains_attachment, attachment_type, 
             day_of_week, hour, device_type, email_client
         )
-        st.write("Calculated Features Dictionary:", sample_features)
+        
+        st.subheader("Analysis Results")
+        st.metric(label="Phishing Probability", value=f"{phishing_prob * 100:.2f}%")
+        
+        if phishing_prob >= 0.5:
+            st.error(f"**Result:** High risk detected! This email is classified as **Phishing** with a **{phishing_prob * 100:.2f}%** probability.")
+        else:
+            st.success(f"**Result:** This email appears to be **Legitimate** (Phishing Probability: **{phishing_prob * 100:.2f}%**).")
 
 with st.sidebar:
     st.header("Roadmap")
