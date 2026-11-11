@@ -6,6 +6,8 @@ import joblib
 
 import base64
 import requests
+import torch
+from transformers import DistilBertModel, DistilBertTokenizer
 
 @st.cache_resource
 def load_artifacts():
