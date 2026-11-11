@@ -1,5 +1,6 @@
 import re
 import streamlit as st
+import pandas as pd
 from src.detector import load_model
 import joblib
 
