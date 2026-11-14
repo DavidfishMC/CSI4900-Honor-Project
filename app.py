@@ -210,12 +210,24 @@ if analyze_clicked and subject.strip() and email_body.strip():
         )
         
         st.subheader("Analysis Results")
-        st.metric(label="Phishing Probability", value=f"{phishing_prob * 100:.2f}%")
         
-        if phishing_prob >= 0.5:
-            st.error(f"**Result:** High risk detected! This email is classified as **Phishing** with a **{phishing_prob * 100:.2f}%** probability.")
+        is_phishing = phishing_probability >= 0.5
+
+        if is_phishing:
+            # Show Phishing Probability when classified as phishing
+            st.metric(label="Phishing Probability", value=f"{phishing_prob * 100:.2f}%")
+            st.error(
+                f"**Threat Detected:** This email is classified as **Phishing** "
+                f"with a **{phishing_probability * 100:.2f}%** phishing probability."
+            )
         else:
-            st.success(f"**Result:** This email appears to be **Legitimate** (Phishing Probability: **{phishing_prob * 100:.2f}%**).")
+            # Show Legitimate Probability when classified as legitimate
+            legit_probability = (1.0 - phishing_probability) * 100
+            st.metric(label="Legitimacy Probability", value=f"{legit_probability * 100:.2f}%")
+            st.success(
+                f"**Safe:** This email is classified as **Legitimate** "
+                f"with a **{legit_probability:.2f}%** legitimacy probability."
+            )
 
 with st.sidebar:
     st.header("Roadmap")
