@@ -182,7 +182,7 @@ with col4:
 btn_col, msg_col = st.columns([1, 2])
 
 with btn_col:
-    analyze_clicked = st.button("Analyze email", type="primary")
+    analyze_clicked = st.button("Analyze Email", type="primary")
 
 with msg_col:
     if analyze_clicked:
