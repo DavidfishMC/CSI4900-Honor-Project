@@ -193,20 +193,22 @@ with msg_col:
         elif not email_body.strip():
             st.error("⚠️ Please enter email content, and double-check your other inputs!")
 
-def result_bar(label: str, confidence: float, title: str = None):
-    pct = max(0, min(100, round(confidence * 100)))
-    is_phish = label == "phishing"
-    color = "#d93025" if is_phish else "#1e8e3e"          
+def result_bar(p_phish: float, title: str = None):
+    p_phish = max(0.0, min(1.0, p_phish))
+    phish_pct = p_phish * 100
+    legit_pct = 100 - phish_pct
     if title is None:
-        title = (f"{pct}% phishing probability" if is_phish
-                 else f"{pct}% legitimacy probability")
+        title = (f"{phish_pct:.1f}% phishing probability" if p_phish >= 0.5
+                 else f"{legit_pct:.1f}% legitimacy probability")
     st.markdown(f"### {title}")
     st.markdown(
-        f"""
-        <div style="background:rgba(128,128,128,0.25);border-radius:8px;height:22px;">
-          <div style="background:{color};width:{pct}%;height:100%;border-radius:8px;"></div>
-        </div>
-        """,
+f"""<div style="display:flex;height:26px;border-radius:8px;overflow:hidden;">
+<div style="width:{legit_pct:.1f}%;background:#1e8e3e;"></div>
+<div style="width:{phish_pct:.1f}%;background:#d93025;"></div>
+</div>
+<div style="display:flex;justify-content:space-between;font-size:13px;margin-top:4px;">
+<span>Legitimate {legit_pct:.1f}%</span><span>Phishing {phish_pct:.1f}%</span>
+</div>""",
         unsafe_allow_html=True,
     )
 
