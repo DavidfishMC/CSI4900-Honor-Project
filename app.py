@@ -225,7 +225,7 @@ if analyze_clicked and subject.strip() and email_body.strip():
 
     if vt_flagged:
         st.error("**Threat detected:** VirusTotal flagged a link in this email as malicious.")
-        result_bar("phishing", 1.0, title="Flagged as malicious by VirusTotal")
+        result_bar(1.0, title="Flagged as malicious by VirusTotal")
     else:
         phishing_prob = classify_email(
             subject, email_body, contains_attachment, attachment_type,
@@ -233,10 +233,9 @@ if analyze_clicked and subject.strip() and email_body.strip():
         )
         if phishing_prob >= 0.5:
             st.error("Warning: Potential Phishing Detected")
-            result_bar("phishing", phishing_prob)
         else:
             st.success("Verified: Email Appears Safe")
-            result_bar("legitimate", 1.0 - phishing_prob)
+        result_bar(phishing_prob)
 
 with st.sidebar:
     st.header("Roadmap")
