@@ -84,6 +84,41 @@ def check_virustotal_links(urls):
             
     return False
 
+MIN_MALICIOUS_ENGINES = 2   # set to 1 while testing, raise later to cut false positives
+DOMAIN_RE = re.compile(r"^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
+
+def normalize_domain(raw: str):
+    d = raw.strip().lower()
+    if "@" in d:
+        d = d.split("@")[-1]
+    d = d.removeprefix("https://").removeprefix("http://").split("/")[0]
+    return d if DOMAIN_RE.match(d) else None      # None = not a valid domain
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _vt_domain_lookup(domain: str):
+    resp = requests.get(
+        f"https://www.virustotal.com/api/v3/domains/{domain}",
+        headers={"x-apikey": st.secrets["VIRUSTOTAL_API_KEY"]},
+        timeout=5,
+    )
+    if resp.status_code == 200:
+        attrs = resp.json().get("data", {}).get("attributes", {})
+        return attrs.get("last_analysis_stats", {})
+    if resp.status_code == 404:
+        return {}                                  # VirusTotal has never seen it
+    raise RuntimeError(f"VirusTotal returned {resp.status_code}")
+
+def check_virustotal_domain(domain: str):
+    """Returns (number of engines that flagged it, had_error)."""
+    try:
+        stats = _vt_domain_lookup(domain)
+    except Exception:
+        return 0, True
+    return stats.get("malicious", 0), False
+
+def defang_domain(domain: str) -> str:
+    return domain.replace(".", "[.]")
+
 def extract_features(subject, body, has_attachment, att_type, day, hr, device, client):
     full_text = f"{subject} {body}".strip() if subject else body.strip()
     
@@ -152,6 +187,7 @@ model = load_model()
 
 subject = st.text_input("Enter Email Subject Line", placeholder="e.g., URGENT: Verify your account")
 email_body = st.text_area("Enter Email Content", height=220, placeholder="Paste the body of the email here. Keep all links, do not worry about adding attachements.")
+sender_domain = st.text_input("Sender email domain (optional)", placeholder="e.g. paypa1-secure.com")
 email = f"Subject: {subject}\n\n{email_body}" if subject else email_body
 
 contains_attachment = st.checkbox("Select if your email contains a File Attachment")
@@ -221,11 +257,20 @@ if analyze_clicked and subject.strip() and email_body.strip():
 
     vt_flagged = check_virustotal_links(extracted_urls[:5]) if extracted_urls else False
 
+    domain = normalize_domain(sender_domain) if sender_domain.strip() else None
+    if sender_domain.strip() and domain is None:
+        st.warning("That doesn't look like a valid domain, so the sender-domain check was skipped.")
+    domain_hits, domain_error = check_virustotal_domain(domain) if domain else (0, False)
+    domain_flagged = domain_hits >= MIN_MALICIOUS_ENGINES
+
     st.subheader("Analysis Results")
 
-    if vt_flagged:
-        st.error("**Threat detected:** VirusTotal flagged a link in this email as malicious.")
+    if vt_flagged or domain_flagged:
+        st.error("**Threat detected:** VirusTotal flagged this email's links or sender domain as malicious.")
         result_bar(1.0, title="Flagged as malicious by VirusTotal")
+        if domain_flagged:
+            st.error(f"**This sender domain is malicious!** Flagged by {domain_hits} security engines.")
+            st.code(defang_domain(domain), language=None)
     else:
         phishing_prob = classify_email(
             subject, email_body, contains_attachment, attachment_type,
@@ -236,6 +281,9 @@ if analyze_clicked and subject.strip() and email_body.strip():
         else:
             st.success("Verified: Email Appears Safe")
         result_bar(phishing_prob)
+
+    if domain_error:
+        st.warning("VirusTotal couldn't check the sender domain (rate limit or network issue).")
 
 with st.sidebar:
     st.header("Roadmap")
