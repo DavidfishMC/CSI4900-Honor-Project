@@ -193,39 +193,48 @@ with msg_col:
         elif not email_body.strip():
             st.error("⚠️ Please enter email content, and double-check your other inputs!")
 
+def result_bar(label: str, confidence: float, title: str = None):
+    pct = max(0, min(100, round(confidence * 100)))
+    is_phish = label == "phishing"
+    color = "#d93025" if is_phish else "#1e8e3e"          
+    if title is None:
+        title = (f"{pct}% phishing probability" if is_phish
+                 else f"{pct}% legitimacy probability")
+    st.markdown(f"### {title}")
+    st.markdown(
+        f"""
+        <div style="background:rgba(128,128,128,0.25);border-radius:8px;height:22px;">
+          <div style="background:{color};width:{pct}%;height:100%;border-radius:8px;"></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 if analyze_clicked and subject.strip() and email_body.strip():
-    # Extract links from the combined text first
     combined_text = f"{subject} {email_body}"
-    extracted_urls = re.findall(r'https?://[^\s]+|www\.[^\s]+', combined_text)
-    
-    # Check links against VirusTotal before running feature extraction or ML prediction
-    vt_flagged = check_virustotal_links(extracted_urls) if extracted_urls else False
-    
+    extracted_urls = [
+        u.rstrip(".,;:)]}>\"'")
+        for u in re.findall(r'https?://[^\s]+|www\.[^\s]+', combined_text)
+    ]
+
+    vt_flagged = check_virustotal_links(extracted_urls[:5]) if extracted_urls else False
+
+    st.subheader("Analysis Results")
+
     if vt_flagged:
-        st.error("**Threat Detected:** VirusTotal flagged one or more links in this email as malicious. This email is classified as **Phishing** with a **100%** probability.")
+        st.error("**Threat detected:** VirusTotal flagged a link in this email as malicious.")
+        result_bar("phishing", 1.0, title="Flagged as malicious by VirusTotal")
     else:
         phishing_prob = classify_email(
-            subject, email_body, contains_attachment, attachment_type, 
+            subject, email_body, contains_attachment, attachment_type,
             day_of_week, hour, device_type, email_client
         )
-        
-        st.subheader("Analysis Results")
-        
-        is_phishing = phishing_prob >= 0.5
-
-        if is_phishing:
-            # Display Phishing Probability prominently when it's a threat
-            display_score = phishing_prob * 100
-            metric_label = "Phishing Probability"
+        if phishing_prob >= 0.5:
             st.error("Warning: Potential Phishing Detected")
+            result_bar("phishing", phishing_prob)
         else:
-            # Display Legitimate Probability prominently when it's safe
-            display_score = (1.0 - phishing_prob) * 100
-            metric_label = "Legitimacy Probability"
             st.success("Verified: Email Appears Safe")
-
-        # Render the large metric number on the dashboard
-        st.metric(label=metric_label, value=f"{display_score:.2f}%")
+            result_bar("legitimate", 1.0 - phishing_prob)
 
 with st.sidebar:
     st.header("Roadmap")
