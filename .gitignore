@@ -4,7 +4,6 @@ __pycache__/
 .env
 .streamlit/secrets.toml
 data/
-*.csv
 models/*.joblib
 .ipynb_checkpoints/
 .streamlit/
