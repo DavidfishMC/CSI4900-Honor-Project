@@ -524,7 +524,7 @@ def load_model():
 model = load_model()
 
 subject = st.text_input("Enter Email Subject Line", placeholder="e.g., URGENT: Verify your account")
-email_body = st.text_area("Enter Email Content", height=220, placeholder="Paste the body of the email here. Keep all links, do not worry about adding attachements.")
+email_body = st.text_area("Enter Email Content", height=220, placeholder="Paste the text of the email body here. Keep all links. Emails with little text (< 5 words) will not provide effective analysis.")
 sender_domain = st.text_input("Sender email domain (optional)", placeholder="e.g. paypa1-secure.com")
 email = f"Subject: {subject}\n\n{email_body}" if subject else email_body
 
