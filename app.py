@@ -7,6 +7,7 @@ import ijson
 import base64
 import requests
 import torch
+import os
 from transformers import DistilBertModel, DistilBertTokenizer
 from difflib import SequenceMatcher
 
@@ -67,23 +68,30 @@ def classify_email(subject, email_body, contains_attachment, attachment_type, da
     return probs[1] # Phishing probability
 
 def check_virustotal_links(urls):
-    API_KEY = st.secrets["VIRUSTOTAL_API_KEY"]
-    headers = {"x-apikey": API_KEY}
-    
+    """Returns (confirmed_malicious, had_error).
+    Only flags when at least MIN_MALICIOUS_ENGINES engines say 'malicious'.
+    404 (URL never seen) is not an error and not a detection."""
+    headers = {"x-apikey": st.secrets["VIRUSTOTAL_API_KEY"]}
+    had_error = False
+
     for url in urls:
         url_id = base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
         endpoint = f"https://www.virustotal.com/api/v3/urls/{url_id}"
-        
         try:
             response = requests.get(endpoint, headers=headers, timeout=5)
-            if response.status_code == 200:
-                stats = response.json().get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
-                if stats.get("malicious", 0) > 0 or stats.get("suspicious", 0) > 0:
-                    return True
         except Exception:
-            pass # Fail silently or handle gracefully without UI popups
-            
-    return False
+            had_error = True
+            continue
+
+        if response.status_code == 200:
+            stats = (response.json().get("data", {})
+                     .get("attributes", {}).get("last_analysis_stats", {}))
+            if stats.get("malicious", 0) >= MIN_MALICIOUS_ENGINES:
+                return True, had_error
+        elif response.status_code != 404:
+            had_error = True          # rate limit, bad key, server error
+
+    return False, had_error
 
 MIN_MALICIOUS_ENGINES = 2   # set to 1 while testing, raise later to cut false positives
 DOMAIN_RE = re.compile(r"^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
@@ -144,8 +152,12 @@ def defang_url(u: str) -> str:
 # ---------- MITRE ATT&CK data, loaded from MITRE's STIX 2.1 dataset ----------
 ATTACK_STIX_URL = ("https://raw.githubusercontent.com/mitre-attack/attack-stix-data/"
                    "master/enterprise-attack/enterprise-attack.json")
-STAGE_ORDER = ("resource-development", "initial-access", "execution")   # ATT&CK tactic shortnames
-
+STAGE_ORDER = (
+    "resource-development",
+    "initial-access",
+    "defense-evasion",
+    "execution"
+)
 def _clean(text: str, limit: int = 450) -> str:
     text = re.sub(r"\(Citation:[^)]*\)", "", text)
     text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
@@ -187,73 +199,263 @@ def load_attack_data():
         t["mitigations"] = sorted(by_target.get(t["stix_id"], []))
     return {"techniques": techs, "tactics": tactics, "version": version}
 
-# ---------- Your detection rules: which technique fits this email ----------
-def build_findings(text, urls, has_attachment, attachment_type, domain, domain_hits):
-    findings = []                                  # list of (technique_id, evidence)
-    if domain:
-        if domain_hits >= MIN_MALICIOUS_ENGINES:
-            findings.append(("T1583.001", f"Sender domain {defang_domain(domain)} flagged by {domain_hits} engines"))
-        else:
-            brand = lookalike_brand(domain)
-            if brand:
-                findings.append(("T1583.001", f"Sender domain {defang_domain(domain)} resembles '{brand}'"))
-    if has_attachment:
-        findings.append(("T1566.001", f"Attachment present ({attachment_type})"))
-        findings.append(("T1204.002", "Succeeds if the recipient opens the file"))
+
+def build_findings(
+    text, urls, has_attachment, attachment_type,
+    domain, domain_hits, attachment_results=None
+):
+    findings = []
+
+    # Only map T1583.001 on a confirmed VirusTotal flag, not a lookalike alone.
+    if domain and domain_hits >= MIN_MALICIOUS_ENGINES:
+        findings.append((
+            "T1583.001",
+            f"Sender domain {defang_domain(domain)} flagged by "
+            f"{domain_hits} engines"
+        ))
+
+    risky = [r for r in (attachment_results or [])
+        if r["risk"] in ("Medium", "High")]
+    if has_attachment and risky:
+        names = ", ".join(f"'{r['filename']}' ({r['risk']} risk)" for r in risky)
+        findings.append((
+            "T1566.001",
+            f"Suspicious attachment filename(s): {names}"
+        ))
+
+    for result in attachment_results or []:
+        if "T1036.007" in result["mitre"]:
+            findings.append((
+                "T1036.007",
+                f"Potential double-extension disguise in "
+                f"'{result['filename']}'"
+        ))
+
     if urls:
         shown = ", ".join(defang_url(u) for u in urls[:3])
         findings.append(("T1566.002", f"{len(urls)} link(s): {shown}"))
-        findings.append(("T1204.001", "Succeeds if the recipient clicks the link"))
-    if PHONE_RE.search(text) and re.search(r"\b(call|phone|hotline)\b", text, re.I):
+        findings.append((
+            "T1204.001",
+            "Potential outcome if the recipient clicks a malicious link"
+        ))
+
+    if PHONE_RE.search(text) and re.search(
+        r"\b(call|phone|hotline)\b", text, re.I
+    ):
         findings.append(("T1566.004", "Phone number plus a call-to-action"))
-    if not any(tid.startswith("T1566") for tid, _ in findings):
-        findings.append(("T1566", "Flagged as phishing, but no link, attachment, or phone number to narrow it down"))
+
     return findings
 
+
 def show_attack_section(findings):
-    with st.expander("Advanced details: MITRE ATT&CK kill chain"):
-        try:
-            data = load_attack_data()
-        except Exception:
-            data = None
-            st.warning("Couldn't load MITRE ATT&CK data right now, so only technique IDs are shown.")
+    st.markdown("#### MITRE ATT&CK kill chain")
 
-        if not data:
-            for tid, evidence in findings:
-                st.markdown(f"[{tid}]({attack_url(tid)})")
-                st.text(evidence)
-            return
+    try:
+        data = load_attack_data()
+    except Exception:
+        data = None
+        st.warning("Couldn't load MITRE ATT&CK data right now, so only technique IDs are shown.")
 
-        techs, tactics = data["techniques"], data["tactics"]
-        stages = {s: [] for s in STAGE_ORDER}
-        for tid, evidence in findings:                       # stage comes from MITRE's data
-            for phase in techs.get(tid, {}).get("phases", []):
-                if phase in stages:
-                    stages[phase].append((tid, evidence))
+    if not findings:
+        st.info(
+            "No specific MITRE ATT&CK technique could be tied to this email's "
+            "content (no supported link, attachment, or phone evidence). "
+            "The flag came from the overall wording and style of the email."
+        )
+        t = data["techniques"].get("T1566") if data else None
+        if t:
+            st.markdown(f"**General context: [T1566 {t['name']}]({attack_url('T1566')})**")
+            st.write(t["description"])
+            if t["mitigations"]:
+                st.caption("MITRE mitigations: " + ", ".join(t["mitigations"]))
+            st.caption("Background only. This is not a detected technique for this email.")
+        return
 
-        cols = st.columns(len(STAGE_ORDER))
-        for col, stage in zip(cols, STAGE_ORDER):
+    if not data:
+        for tid, evidence in findings:
+            st.markdown(f"[{tid}]({attack_url(tid)})")
+            st.text(evidence)
+        return
+
+    techs, tactics = data["techniques"], data["tactics"]
+    stages = {s: [] for s in STAGE_ORDER}
+    for tid, evidence in findings:                       # stage comes from MITRE's data
+        for phase in techs.get(tid, {}).get("phases", []):
+            if phase in stages:
+                stages[phase].append((tid, evidence))
+
+    active_stages = [s for s in STAGE_ORDER if stages[s]]   # hide empty tactics
+    if active_stages:
+        cols = st.columns(len(active_stages))
+        for col, stage in zip(cols, active_stages):
             tac = tactics.get(stage, {"name": stage.replace("-", " ").title(), "id": ""})
             with col:
                 st.markdown(f"**{tac['name']}**  \n`{tac['id']}`")
-                if not stages[stage]:
-                    st.info("No evidence")
                 for tid, evidence in stages[stage]:
                     st.error(f"[{tid}]({attack_url(tid)}) {techs[tid]['name']}")
-                    st.text(evidence)                        # st.text: email-derived text is never rendered as markdown
+                    st.text(evidence)                    # st.text: email-derived text is never rendered as markdown
 
-        st.markdown("**About these techniques (from MITRE ATT&CK)**")
-        for tid, _ in findings:
-            t = techs.get(tid)
-            if t:
-                st.markdown(f"**{tid} {t['name']}**")
-                st.write(t["description"])
-                if t["mitigations"]:
-                    st.caption("MITRE mitigations: " + ", ".join(t["mitigations"]))
-        ver = f" v{data['version']}" if data.get("version") else ""
-        st.caption(f"Source: MITRE ATT&CK Enterprise{ver} (STIX 2.1). The technique mapping is inferred from "
-                   "the email's contents, not confirmed attacker behavior. The Execution stage shows what would "
-                   "happen if the recipient interacts with the email.")
+    st.markdown("**About these techniques (from MITRE ATT&CK)**")
+    for tid, _ in findings:
+        t = techs.get(tid)
+        if t:
+            st.markdown(f"**{tid} {t['name']}**")
+            st.write(t["description"])
+            if t["mitigations"]:
+                st.caption("MITRE mitigations: " + ", ".join(t["mitigations"]))
+    ver = f" v{data['version']}" if data.get("version") else ""
+    st.caption(f"Source: MITRE ATT&CK Enterprise{ver} (STIX 2.1). The technique mapping is inferred from "
+               "the email's contents, not confirmed attacker behavior. The Execution stage shows what would "
+               "happen if the recipient interacts with the email.")
+
+
+DANGEROUS_EXTENSIONS = {
+    ".exe", ".scr", ".com", ".bat", ".cmd",
+    ".ps1", ".vbs", ".vbe", ".js", ".jse",
+    ".wsf", ".hta", ".lnk", ".pif", ".msi",
+    ".reg", ".dll", ".cpl"
+}
+
+ARCHIVE_EXTENSIONS = {
+    ".zip", ".rar", ".7z", ".iso", ".img"
+}
+
+DECOY_EXTENSIONS = {
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx",
+    ".ppt", ".pptx", ".jpg", ".jpeg", ".png", ".txt"
+}
+
+SUSPICIOUS_KEYWORDS = [
+    "urgent", "action required", "payment", "invoice",
+    "overdue", "refund", "payroll", "salary", "tax",
+    "password", "verify", "account suspended",
+    "account locked", "voicemail", "voice message",
+    "missed call", "shared document", "secure document",
+    "fax", "scan", "delivery", "shipment",
+    "purchase order", "remittance"
+]
+
+
+def analyze_attachment_filename(filename):
+    filename = filename.strip()
+    lower_name = filename.lower()
+    base_name = os.path.basename(lower_name)
+
+    result = {
+        "filename": filename,
+        "score": 0,
+        "risk": "Low",
+        "indicators": [],
+        "recommendation": "",
+        "mitre": []
+    }
+
+    if not filename:
+        return result
+
+    parts = base_name.split(".")
+    extensions = ["." + part for part in parts[1:] if part]
+    final_extension = os.path.splitext(base_name)[1]
+
+    # 1. Double extension, e.g. invoice.pdf.exe
+    if len(extensions) >= 2:
+        if (extensions[-2] in DECOY_EXTENSIONS
+                and extensions[-1] in DANGEROUS_EXTENSIONS):
+            result["score"] += 5
+            result["indicators"].append(
+                f"Double extension detected: {extensions[-2]} followed by "
+                f"{extensions[-1]}. This may disguise the actual file type."
+            )
+            result["mitre"].append("T1036.007")
+
+    # 2. Executable or script file extension
+    if final_extension in DANGEROUS_EXTENSIONS:
+        result["score"] += 4
+        result["indicators"].append(
+            f"Executable or script extension detected: {final_extension}"
+        )
+
+    # 3. Archive file
+    elif final_extension in ARCHIVE_EXTENSIONS:
+        result["score"] += 1
+        result["indicators"].append(
+            f"Compressed/archive file detected: {final_extension}. "
+            "Its contents have not been inspected."
+        )
+
+    # 4. Common phishing-related filename wording
+    matched_keywords = [
+        keyword for keyword in SUSPICIOUS_KEYWORDS
+        if keyword in lower_name
+    ]
+
+    if matched_keywords:
+        result["score"] += min(len(matched_keywords), 2)
+        result["indicators"].append(
+            "Potential phishing-related wording: "
+            + ", ".join(matched_keywords)
+        )
+
+    # 5. Unusual filename patterns
+    if re.search(r"(.)\1{5,}", base_name):
+        result["score"] += 1
+        result["indicators"].append(
+            "Filename contains an unusually long repeated character sequence."
+        )
+
+    if len(filename) > 100:
+        result["score"] += 1
+        result["indicators"].append("Unusually long filename.")
+
+    # Risk level is a heuristic, not a malware probability.
+    if result["score"] >= 5:
+        result["risk"] = "High"
+        result["recommendation"] = (
+            "Treat this attachment as suspicious. Do not open or run it "
+            "until its legitimacy has been independently verified."
+        )
+    elif result["score"] >= 2:
+        result["risk"] = "Medium"
+        result["recommendation"] = (
+            "Verify the sender and confirm that you were expecting this "
+            "attachment before opening it."
+        )
+    else:
+        result["risk"] = "Low"
+        result["recommendation"] = (
+            "No strong filename-based warning was detected. This does not "
+            "guarantee that the attachment is safe."
+        )
+
+    return result
+
+
+def show_attachment_results(results):
+    if not results:
+        return
+
+    st.subheader("Attachment Filename Analysis")
+
+    for result in results:
+        st.markdown(f"**{result['filename']}**")
+
+        if result["risk"] == "High":
+            st.error(f"High filename risk — score: {result['score']}")
+        elif result["risk"] == "Medium":
+            st.warning(f"Medium filename risk — score: {result['score']}")
+        else:
+            st.success(f"Low filename risk — score: {result['score']}")
+
+        if result["indicators"]:
+            st.markdown("**Indicators detected:**")
+            for indicator in result["indicators"]:
+                st.write(f"- {indicator}")
+        else:
+            st.write("No suspicious filename patterns detected.")
+
+        st.markdown(f"**Recommendation:** {result['recommendation']}")
+        st.divider()
+
 
 def extract_features(subject, body, has_attachment, att_type, day, hr, device, client):
     full_text = f"{subject} {body}".strip() if subject else body.strip()
@@ -326,10 +528,33 @@ email_body = st.text_area("Enter Email Content", height=220, placeholder="Paste 
 sender_domain = st.text_input("Sender email domain (optional)", placeholder="e.g. paypa1-secure.com")
 email = f"Subject: {subject}\n\n{email_body}" if subject else email_body
 
-contains_attachment = st.checkbox("Select if your email contains a File Attachment")
-attachment_type = 'None'
+
+contains_attachment = st.checkbox(
+    "Select if your email contains a File Attachment"
+)
+
+attachment_type = "None"
+attachment_filenames = []
+
 if contains_attachment:
-    attachment_type = st.selectbox("Provide the file type of one of the Attachment(s)", ["pdf", "docx", "zip", "exe"])
+    attachment_type = st.selectbox(
+        "Provide the file type of one of the Attachment(s)",
+        ["pdf", "docx", "zip", "exe"]
+    )
+
+    filenames_input = st.text_area(
+        "Attachment filenames (one per line)",
+        placeholder="Invoice.pdf.exe\nPayment_Confirmation.zip\nReport.docx",
+        height=100,
+        help="Enter the attachment names exactly as they appear in the email."
+    )
+
+    attachment_filenames = [
+        name.strip()
+        for name in filenames_input.splitlines()
+        if name.strip()
+    ]
+
 
 hour_options = {
     "12:00 AM (Midnight)": 0, "1:00 AM": 1, "2:00 AM": 2, "3:00 AM": 3,
@@ -384,6 +609,8 @@ f"""<div style="display:flex;height:26px;border-radius:8px;overflow:hidden;">
         unsafe_allow_html=True,
     )
 
+REVIEW_THRESHOLD = 0.35   # placeholder; tune after the calibration work
+
 if analyze_clicked and subject.strip() and email_body.strip():
     combined_text = f"{subject} {email_body}"
     extracted_urls = [
@@ -391,7 +618,15 @@ if analyze_clicked and subject.strip() and email_body.strip():
         for u in re.findall(r'https?://[^\s]+|www\.[^\s]+', combined_text)
     ]
 
-    vt_flagged = check_virustotal_links(extracted_urls[:5]) if extracted_urls else False
+    attachment_results = [
+        analyze_attachment_filename(name)
+        for name in attachment_filenames
+    ]
+
+    if extracted_urls:
+        vt_flagged, link_error = check_virustotal_links(extracted_urls[:5])
+    else:
+        vt_flagged, link_error = False, False
 
     domain = normalize_domain(sender_domain) if sender_domain.strip() else None
     if sender_domain.strip() and domain is None:
@@ -399,41 +634,84 @@ if analyze_clicked and subject.strip() and email_body.strip():
     domain_hits, domain_error = check_virustotal_domain(domain) if domain else (0, False)
     domain_flagged = domain_hits >= MIN_MALICIOUS_ENGINES
 
+    # The model's own prediction is always computed; filenames never touch it.
+    phishing_prob = classify_email(
+        subject, email_body, contains_attachment, attachment_type,
+        day_of_week, hour, device_type, email_client
+    )
+
+    vt_confirmed = vt_flagged or domain_flagged
+    is_flagged = vt_confirmed or phishing_prob >= 0.5
+
     st.subheader("Analysis Results")
 
-    if vt_flagged or domain_flagged:
+    # 1) VirusTotal-confirmed threat overrides the model
+    if vt_confirmed:
         st.error("**Threat detected:** VirusTotal flagged this email's links or sender domain as malicious.")
         result_bar(1.0, title="Flagged as malicious by VirusTotal")
         if domain_flagged:
             st.error(f"**This sender domain is malicious!** Flagged by {domain_hits} security engines.")
             st.code(defang_domain(domain), language=None)
-    else:
-        phishing_prob = classify_email(
-            subject, email_body, contains_attachment, attachment_type,
-            day_of_week, hour, device_type, email_client
+        st.caption(
+            f"The email classifier's independent prediction was "
+            f"{phishing_prob * 100:.1f}% phishing. The VirusTotal finding takes priority."
         )
-        if phishing_prob >= 0.5:
-            st.error("Warning: Potential Phishing Detected")
-        else:
-            st.success("Verified: Email Appears Safe")
+
+    # 2) Otherwise the model decides
+    elif phishing_prob >= 0.5:
+        st.error("Warning: Potential Phishing Detected")
         result_bar(phishing_prob)
+    elif phishing_prob >= REVIEW_THRESHOLD:
+        st.warning("Inconclusive: the model leans legitimate but isn't confident. Review this email manually.")
+        result_bar(phishing_prob)
+    else:
+        st.success("No phishing detected by the model")
+        result_bar(phishing_prob)
+        st.caption("This is not a guarantee the email is safe. No VirusTotal detections also doesn't prove safety.")
+
+    # Lookalike note (advisory only, no verdict change)
+    if domain and not domain_flagged:
+        brand = lookalike_brand(domain)
+        if brand:
+            st.info(f"The sender domain {defang_domain(domain)} resembles '{brand}'. Verify it independently.")
+
+    # 3) Attachment filename advice, below the verdict, advisory only
+    if contains_attachment:
+        if attachment_results:
+            show_attachment_results(attachment_results)
+        else:
+            st.info(
+                "An attachment was reported, but no filename was provided. "
+                "Filename analysis was skipped."
+            )
 
     if domain_error:
         st.warning("VirusTotal couldn't check the sender domain (rate limit or network issue).")
+    if link_error:
+        st.warning("VirusTotal couldn't check some links (rate limit or network issue), so the link check may be incomplete.")
 
-    with st.expander("Read More - How was this email analyzed?"):
-        findings = build_findings(combined_text, extracted_urls, contains_attachment,
-                                  attachment_type, domain, domain_hits)
-        show_attack_section(findings)
+    # 4) MITRE only when the email was actually flagged
+    if is_flagged:
+        with st.expander("Read More - How was this email analyzed?"):
+            findings = build_findings(
+                combined_text,
+                extracted_urls,
+                contains_attachment,
+                attachment_type,
+                domain,
+                domain_hits,
+                attachment_results
+            )
+            show_attack_section(findings)
 
 with st.sidebar:
     st.header("Roadmap")
     st.markdown("- Trained ML model (DistilBERT, Sentence-BERT?, Deep Neural Network?, TF-IDF? + Random Forest, XGBoost?, SVM?)\n"
-                "- VirusTotal / AbuseIPDB API link checks, .eml` upload (SPF/DKIM/DMARC)?\n"
-                "- App features such as Streamlit, wire in trained model into website backend\n"
-                "- Security layer like Automated response (SOAR) with Shuffle, ATT&CK Severity Score and Sigma Rules, ansible playbooks?\n"
-                "- Elasticsearch logging + Kibana dashboard\n"
-                "- Infrastructure such as Dockerized deployment with Docker, Github Actions, Ubuntu VM, Terraform with AWS S3 + IAM\n"
-                "- CI: GitHub Actions (pytest, ruff, Bandit, pip-audit, Trivy), CD: Actions builds the image and pushes it to ghcr.io, and Ansible pulls and runs it on the VM\n"
-                "- Unlikely Features/In Consideration: FastAPI backend + TypeScript, GoPhish Pen Testing, RAG")
+            "- VirusTotal / AbuseIPDB API link checks\n"
+            "- App features such as Streamlit, wire in trained model into website backend\n"
+            "- Security layer like Automated response (SOAR) with Shuffle, ATT&CK Severity Score and Sigma Rules, ansible playbooks?\n"
+            "- Elasticsearch logging + Kibana dashboard\n"
+            "- Infrastructure such as Dockerized deployment with Docker, Github Actions, Ubuntu VM, Terraform with AWS S3 + IAM\n"
+            "- CI: GitHub Actions (pytest, ruff, Bandit, pip-audit, Trivy), CD: Actions builds the image and pushes it to ghcr.io, and Ansible pulls and runs it on the VM\n"
+            "- Unlikely Features/In Consideration: FastAPI backend + TypeScript, GoPhish Pen Testing, RAG")
     
