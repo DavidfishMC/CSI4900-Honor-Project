@@ -3,11 +3,12 @@ import streamlit as st
 import pandas as pd
 from src.detector import load_model
 import joblib
-
+import ijson
 import base64
 import requests
 import torch
 from transformers import DistilBertModel, DistilBertTokenizer
+from difflib import SequenceMatcher
 
 @st.cache_resource
 def load_artifacts():
@@ -118,6 +119,141 @@ def check_virustotal_domain(domain: str):
 
 def defang_domain(domain: str) -> str:
     return domain.replace(".", "[.]")
+
+BRANDS = ["paypal", "microsoft", "google", "amazon", "netflix",
+          "facebook", "linkedin", "outlook", "canadapost"]
+
+def lookalike_brand(domain: str):
+    """Simple heuristic: the domain's main label resembles a known brand."""
+    label = domain.split(".")[-2]
+    for brand in BRANDS:
+        if label == brand:
+            continue
+        if brand in label or SequenceMatcher(None, label, brand).ratio() >= 0.8:
+            return brand
+    return None
+
+PHONE_RE = re.compile(r"\+?\d[\d\s().-]{8,}\d")
+
+def attack_url(tid: str) -> str:
+    return "https://attack.mitre.org/techniques/" + tid.replace(".", "/") + "/"
+
+def defang_url(u: str) -> str:
+    return u.replace("http", "hxxp").replace(".", "[.]")
+
+# ---------- MITRE ATT&CK data, loaded from MITRE's STIX 2.1 dataset ----------
+ATTACK_STIX_URL = ("https://raw.githubusercontent.com/mitre-attack/attack-stix-data/"
+                   "master/enterprise-attack/enterprise-attack.json")
+STAGE_ORDER = ("resource-development", "initial-access", "execution")   # ATT&CK tactic shortnames
+
+def _clean(text: str, limit: int = 450) -> str:
+    text = re.sub(r"\(Citation:[^)]*\)", "", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = text.strip().split("\n\n")[0]
+    return text if len(text) <= limit else text[:limit].rsplit(" ", 1)[0] + "..."
+
+@st.cache_data(ttl=7 * 24 * 3600, show_spinner="Loading MITRE ATT&CK data...")
+def load_attack_data():
+    techs, tactics, course_names, mitigates, version = {}, {}, {}, [], None
+    with requests.get(ATTACK_STIX_URL, stream=True, timeout=60) as resp:
+        resp.raise_for_status()
+        resp.raw.decode_content = True
+        for obj in ijson.items(resp.raw, "objects.item"):      # streams one object at a time
+            kind = obj.get("type")
+            ref = next((r for r in obj.get("external_references", [])
+                        if r.get("source_name") == "mitre-attack"), {})
+            if kind == "attack-pattern":
+                if (ref.get("external_id")
+                        and not obj.get("revoked") and not obj.get("x_mitre_deprecated")):
+                    techs[ref["external_id"]] = {
+                        "stix_id": obj["id"],
+                        "name": obj["name"],
+                        "description": _clean(obj.get("description", "")),
+                        "phases": [p["phase_name"] for p in obj.get("kill_chain_phases", [])],
+                    }
+            elif kind == "x-mitre-tactic":
+                tactics[obj["x_mitre_shortname"]] = {"name": obj["name"], "id": ref.get("external_id", "")}
+            elif kind == "course-of-action":
+                course_names[obj["id"]] = obj["name"]
+            elif kind == "relationship" and obj.get("relationship_type") == "mitigates":
+                mitigates.append((obj["source_ref"], obj["target_ref"]))
+            elif kind == "x-mitre-collection":
+                version = obj.get("x_mitre_version")
+    by_target = {}
+    for source, target in mitigates:
+        if source in course_names:
+            by_target.setdefault(target, set()).add(course_names[source])
+    for t in techs.values():
+        t["mitigations"] = sorted(by_target.get(t["stix_id"], []))
+    return {"techniques": techs, "tactics": tactics, "version": version}
+
+# ---------- Your detection rules: which technique fits this email ----------
+def build_findings(text, urls, has_attachment, attachment_type, domain, domain_hits):
+    findings = []                                  # list of (technique_id, evidence)
+    if domain:
+        if domain_hits >= MIN_MALICIOUS_ENGINES:
+            findings.append(("T1583.001", f"Sender domain {defang_domain(domain)} flagged by {domain_hits} engines"))
+        else:
+            brand = lookalike_brand(domain)
+            if brand:
+                findings.append(("T1583.001", f"Sender domain {defang_domain(domain)} resembles '{brand}'"))
+    if has_attachment:
+        findings.append(("T1566.001", f"Attachment present ({attachment_type})"))
+        findings.append(("T1204.002", "Succeeds if the recipient opens the file"))
+    if urls:
+        shown = ", ".join(defang_url(u) for u in urls[:3])
+        findings.append(("T1566.002", f"{len(urls)} link(s): {shown}"))
+        findings.append(("T1204.001", "Succeeds if the recipient clicks the link"))
+    if PHONE_RE.search(text) and re.search(r"\b(call|phone|hotline)\b", text, re.I):
+        findings.append(("T1566.004", "Phone number plus a call-to-action"))
+    if not any(tid.startswith("T1566") for tid, _ in findings):
+        findings.append(("T1566", "Flagged as phishing, but no link, attachment, or phone number to narrow it down"))
+    return findings
+
+def show_attack_section(findings):
+    with st.expander("Advanced details: MITRE ATT&CK kill chain"):
+        try:
+            data = load_attack_data()
+        except Exception:
+            data = None
+            st.warning("Couldn't load MITRE ATT&CK data right now, so only technique IDs are shown.")
+
+        if not data:
+            for tid, evidence in findings:
+                st.markdown(f"[{tid}]({attack_url(tid)})")
+                st.text(evidence)
+            return
+
+        techs, tactics = data["techniques"], data["tactics"]
+        stages = {s: [] for s in STAGE_ORDER}
+        for tid, evidence in findings:                       # stage comes from MITRE's data
+            for phase in techs.get(tid, {}).get("phases", []):
+                if phase in stages:
+                    stages[phase].append((tid, evidence))
+
+        cols = st.columns(len(STAGE_ORDER))
+        for col, stage in zip(cols, STAGE_ORDER):
+            tac = tactics.get(stage, {"name": stage.replace("-", " ").title(), "id": ""})
+            with col:
+                st.markdown(f"**{tac['name']}**  \n`{tac['id']}`")
+                if not stages[stage]:
+                    st.info("No evidence")
+                for tid, evidence in stages[stage]:
+                    st.error(f"[{tid}]({attack_url(tid)}) {techs[tid]['name']}")
+                    st.text(evidence)                        # st.text: email-derived text is never rendered as markdown
+
+        st.markdown("**About these techniques (from MITRE ATT&CK)**")
+        for tid, _ in findings:
+            t = techs.get(tid)
+            if t:
+                st.markdown(f"**{tid} {t['name']}**")
+                st.write(t["description"])
+                if t["mitigations"]:
+                    st.caption("MITRE mitigations: " + ", ".join(t["mitigations"]))
+        ver = f" v{data['version']}" if data.get("version") else ""
+        st.caption(f"Source: MITRE ATT&CK Enterprise{ver} (STIX 2.1). The technique mapping is inferred from "
+                   "the email's contents, not confirmed attacker behavior. The Execution stage shows what would "
+                   "happen if the recipient interacts with the email.")
 
 def extract_features(subject, body, has_attachment, att_type, day, hr, device, client):
     full_text = f"{subject} {body}".strip() if subject else body.strip()
@@ -284,6 +420,11 @@ if analyze_clicked and subject.strip() and email_body.strip():
 
     if domain_error:
         st.warning("VirusTotal couldn't check the sender domain (rate limit or network issue).")
+
+    with st.expander("Read More - How was this email analyzed?"):
+        findings = build_findings(combined_text, extracted_urls, contains_attachment,
+                                  attachment_type, domain, domain_hits)
+        show_attack_section(findings)
 
 with st.sidebar:
     st.header("Roadmap")
