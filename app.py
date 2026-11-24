@@ -729,6 +729,6 @@ with st.sidebar:
     st.markdown(
         "- *No Guarantees:* Results are informational and do not guarantee an email is safe or malicious. Users should always use their own judgement before interacting with an email.\n"
         "- *External Connections:* External lookups (such as VirusTotal or MITRE data) may be incomplete or unavailable.\n"
-        "- *Placeholder:* Avoid pasting sensitive personal, credential, or confidential data into the tool."
+        "- *Copy Paste Guidlines:* While pasting text into the tool, avoid clicking on any links from the email or downloading any attachments. These actions are not required to use the detector."
     )
     
