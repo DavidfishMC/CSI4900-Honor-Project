@@ -254,7 +254,7 @@ def show_attack_section(findings):
         data = load_attack_data()
     except Exception:
         data = None
-        st.warning("Couldn't load MITRE ATT&CK data right now, so only technique IDs are shown.")
+        st.warning("Couldn't load MITRE ATT&CK data right now. Only technique IDs are shown.")
 
     if not findings:
         st.info(
@@ -440,14 +440,14 @@ def show_attachment_results(results):
         st.markdown(f"**{result['filename']}**")
 
         if result["risk"] == "High":
-            st.error(f"High filename risk — score: {result['score']}")
+            st.error(f"High Filename Risk — Score: {result['score']}")
         elif result["risk"] == "Medium":
-            st.warning(f"Medium filename risk — score: {result['score']}")
+            st.warning(f"Medium Filename Risk — Score: {result['score']}")
         else:
-            st.success(f"Low filename risk — score: {result['score']}")
+            st.success(f"Low Filename risk — Score: {result['score']}")
 
         if result["indicators"]:
-            st.markdown("**Indicators detected:**")
+            st.markdown("**Indicators Detected:**")
             for indicator in result["indicators"]:
                 st.write(f"- {indicator}")
         else:
@@ -524,13 +524,13 @@ def load_model():
 model = load_model()
 
 subject = st.text_input("Enter Email Subject Line", placeholder="e.g., URGENT: Verify your account")
-email_body = st.text_area("Enter Email Content", height=220, placeholder="Paste the text of the email body here. Keep all links. Emails with little text (< 5 words) will not provide effective analysis.")
-sender_domain = st.text_input("Sender email domain (optional)", placeholder="e.g. paypa1-secure.com")
+email_body = st.text_area("Enter Email Content", height=220, placeholder="Paste the text of the email body here. Emails with little text (< 5 words) will not provide effective analysis.")
+sender_domain = st.text_input("Sender Email Domain (Optional)", placeholder="e.g. paypa1-secure.com")
 email = f"Subject: {subject}\n\n{email_body}" if subject else email_body
 
 
-contains_attachment = st.checkbox(
-    "Select if your email contains a File Attachment"
+contains_attachment = st.toggle(
+    "Email contains a File Attachment"
 )
 
 attachment_type = "None"
@@ -538,12 +538,12 @@ attachment_filenames = []
 
 if contains_attachment:
     attachment_type = st.selectbox(
-        "Provide the file type of one of the Attachment(s)",
+        "Provide the file type for one of the Attachment(s)",
         ["pdf", "docx", "zip", "exe"]
     )
 
     filenames_input = st.text_area(
-        "Attachment filenames (one per line)",
+        "Attachment Filenames (One Per Line)",
         placeholder="Invoice.pdf.exe\nPayment_Confirmation.zip\nReport.docx",
         height=100,
         help="Enter the attachment names exactly as they appear in the email."
@@ -595,8 +595,8 @@ def result_bar(p_phish: float, title: str = None):
     phish_pct = p_phish * 100
     legit_pct = 100 - phish_pct
     if title is None:
-        title = (f"{phish_pct:.1f}% phishing probability" if p_phish >= 0.5
-                 else f"{legit_pct:.1f}% legitimacy probability")
+        title = (f"{phish_pct:.1f}% Phishing Probability" if p_phish >= 0.5
+                 else f"{legit_pct:.1f}% Legitimacy Probability")
     st.markdown(f"### {title}")
     st.markdown(
 f"""<div style="display:flex;height:26px;border-radius:8px;overflow:hidden;">
@@ -630,7 +630,7 @@ if analyze_clicked and subject.strip() and email_body.strip():
 
     domain = normalize_domain(sender_domain) if sender_domain.strip() else None
     if sender_domain.strip() and domain is None:
-        st.warning("That doesn't look like a valid domain, so the sender-domain check was skipped.")
+        st.warning("The provided sender domain doesn't look like a valid domain. The sender-domain check was skipped.")
     domain_hits, domain_error = check_virustotal_domain(domain) if domain else (0, False)
     domain_flagged = domain_hits >= MIN_MALICIOUS_ENGINES
 
@@ -647,14 +647,14 @@ if analyze_clicked and subject.strip() and email_body.strip():
 
     # 1) VirusTotal-confirmed threat overrides the model
     if vt_confirmed:
-        st.error("**Threat detected:** VirusTotal flagged this email's links or sender domain as malicious.")
+        st.error("**Threat detected:** VirusTotal flagged at least one of this email's links or sender domain as malicious.")
         result_bar(1.0, title="Flagged as malicious by VirusTotal")
         if domain_flagged:
-            st.error(f"**This sender domain is malicious!** Flagged by {domain_hits} security engines.")
+            st.error(f"**This sender domain is malicious.** Flagged by {domain_hits} security engines.")
             st.code(defang_domain(domain), language=None)
         st.caption(
             f"The email classifier's independent prediction was "
-            f"{phishing_prob * 100:.1f}% phishing. The VirusTotal finding takes priority."
+            f"{phishing_prob * 100:.1f}% phishing. VirusTotal findings takes priority."
         )
 
     # 2) Otherwise the model decides
@@ -662,12 +662,12 @@ if analyze_clicked and subject.strip() and email_body.strip():
         st.error("Warning: Potential Phishing Detected")
         result_bar(phishing_prob)
     elif phishing_prob >= REVIEW_THRESHOLD:
-        st.warning("Inconclusive: the model leans legitimate but isn't confident. Review this email manually.")
+        st.warning("Inconclusive: The model leans legitimate but isn't confident. Review this email manually.")
         result_bar(phishing_prob)
     else:
         st.success("No phishing detected by the model")
         result_bar(phishing_prob)
-        st.caption("This is not a guarantee the email is safe. No VirusTotal detections also doesn't prove safety.")
+        st.caption("This is not a guarantee the email is safe. The lack of VirusTotal detections doesn't guarantee safety.")
 
     # Lookalike note (advisory only, no verdict change)
     if domain and not domain_flagged:
@@ -688,7 +688,7 @@ if analyze_clicked and subject.strip() and email_body.strip():
     if domain_error:
         st.warning("VirusTotal couldn't check the sender domain (rate limit or network issue).")
     if link_error:
-        st.warning("VirusTotal couldn't check some links (rate limit or network issue), so the link check may be incomplete.")
+        st.warning("VirusTotal couldn't check some links (rate limit or network issue).")
 
     # 4) MITRE only when the email was actually flagged
     if is_flagged:
@@ -716,17 +716,17 @@ with st.sidebar:
     )
 
     st.divider()
-    st.header("Interpret Results")
+    st.header("Results Analysis")
     st.markdown(
-        "- *Virustotal Link Check:* All links in the email are checked against a Virustotal database. If any links are found to be malicious, the email returns as phishing probability 100% every time.\n"
-        "- *Placeholder:* Explain phishing vs. legitimacy probability percentages and the manual review threshold.\n"
-        "- *Placeholder:* Explain lookalike domain notes, attachment risk levels, and MITRE ATT&CK details when flagged."
+        "- *Virustotal Database Check:* The sender domain and all links in the email are checked against a Virustotal database. If the sender domain or any links are found to be malicious, the email returns as phishing probability 100% every time.\n"
+        "- *Phishing Probability:* An email with phishing probability of 50% or more is classified as phishing.\n"
+        "- *Filename Analysis:* If attachments and their filenames are provided, filename analysis will provide recommendations depending on if the filename seems malicious or not."
     )
 
     st.divider()
     st.header("Disclaimers")
     st.markdown(
-        "- *Placeholder:* Results are informational and do not guarantee an email is safe or malicious.\n"
+        "- *No Guarantees:* Results are informational and do not guarantee an email is safe or malicious.\n"
         "- *Placeholder:* External lookups (such as VirusTotal or MITRE data) may be incomplete or unavailable.\n"
         "- *Placeholder:* Avoid pasting sensitive personal, credential, or confidential data into the tool."
     )
