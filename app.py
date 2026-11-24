@@ -718,7 +718,7 @@ with st.sidebar:
     st.divider()
     st.header("Interpret Results")
     st.markdown(
-        "- *Placeholder:* Explain how VirusTotal flags override or accompany model predictions.\n"
+        "- *Virustotal Link Check:* All links in the email are checked against a Virustotal database. If any links are found to be malicious, the email returns as phishing probability 100% every time.\n"
         "- *Placeholder:* Explain phishing vs. legitimacy probability percentages and the manual review threshold.\n"
         "- *Placeholder:* Explain lookalike domain notes, attachment risk levels, and MITRE ATT&CK details when flagged."
     )
