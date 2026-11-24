@@ -705,13 +705,29 @@ if analyze_clicked and subject.strip() and email_body.strip():
             show_attack_section(findings)
 
 with st.sidebar:
-    st.header("Roadmap")
-    st.markdown("- Trained ML model (DistilBERT, Sentence-BERT?, Deep Neural Network?, TF-IDF? + Random Forest, XGBoost?, SVM?)\n"
-            "- VirusTotal / AbuseIPDB API link checks\n"
-            "- App features such as Streamlit, wire in trained model into website backend\n"
-            "- Security layer like Automated response (SOAR) with Shuffle, ATT&CK Severity Score and Sigma Rules, ansible playbooks?\n"
-            "- Elasticsearch logging + Kibana dashboard\n"
-            "- Infrastructure such as Dockerized deployment with Docker, Github Actions, Ubuntu VM, Terraform with AWS S3 + IAM\n"
-            "- CI: GitHub Actions (pytest, ruff, Bandit, pip-audit, Trivy), CD: Actions builds the image and pushes it to ghcr.io, and Ansible pulls and runs it on the VM\n"
-            "- Unlikely Features/In Consideration: FastAPI backend + TypeScript, GoPhish Pen Testing, RAG")
+    st.header("User Guide")
+    st.markdown(
+        "1. **Enter Email Subject Line:** Type or paste the email's subject line (required).\n"
+        "2. **Enter Email Content:** Paste the full email body and keep any links intact (required; short texts under 5 words may limit analysis).\n"
+        "3. **Sender Email Domain (optional):** Enter the sender's email address (e.g., `paypa1-secure.com`) to check reputation and lookalike brands.\n"
+        "4. **File Attachment options (optional):** Check *Select if your email contains a File Attachment* to choose a file type (`pdf`, `docx`, `zip`, `exe`) and list attachment filenames (one per line).\n"
+        "5. **Email & context details:** Select the *Day of Week Sent*, *Hour Sent*, *Device Received On*, and *Email Client Received On*.\n"
+        "6. **Analyze Email:** Click **Analyze Email** to run the phishing check and view results."
+    )
+
+    st.divider()
+    st.header("Interpret Results")
+    st.markdown(
+        "- *Placeholder:* Explain how VirusTotal flags override or accompany model predictions.\n"
+        "- *Placeholder:* Explain phishing vs. legitimacy probability percentages and the manual review threshold.\n"
+        "- *Placeholder:* Explain lookalike domain notes, attachment risk levels, and MITRE ATT&CK details when flagged."
+    )
+
+    st.divider()
+    st.header("Disclaimers")
+    st.markdown(
+        "- *Placeholder:* Results are informational and do not guarantee an email is safe or malicious.\n"
+        "- *Placeholder:* External lookups (such as VirusTotal or MITRE data) may be incomplete or unavailable.\n"
+        "- *Placeholder:* Avoid pasting sensitive personal, credential, or confidential data into the tool."
+    )
     
