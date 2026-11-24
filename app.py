@@ -710,7 +710,7 @@ with st.sidebar:
         "1. **Enter Email Subject Line:** Type or paste the email's subject line (required).\n"
         "2. **Enter Email Content:** Paste the full email body and keep any links intact (required; short texts under 5 words may limit analysis).\n"
         "3. **Sender Email Domain (optional):** Enter the sender's email address (e.g., `paypa1-secure.com`) to check reputation and lookalike brands.\n"
-        "4. **File Attachment options (optional):** Check *Select if your email contains a File Attachment* to choose a file type (`pdf`, `docx`, `zip`, `exe`) and list attachment filenames (one per line).\n"
+        "4. **File Attachment options (optional):** Check *Email contains a File Attachment* to choose a file type (`pdf`, `docx`, `zip`, `exe`) and list attachment filenames (one per line).\n"
         "5. **Email & context details:** Select the *Day of Week Sent*, *Hour Sent*, *Device Received On*, and *Email Client Received On*.\n"
         "6. **Analyze Email:** Click **Analyze Email** to run the phishing check and view results."
     )
@@ -721,13 +721,14 @@ with st.sidebar:
         "- *Virustotal Database Check:* The sender domain and all links in the email are checked against a Virustotal database. If the sender domain or any links are found to be malicious, the email returns as phishing probability 100% every time.\n"
         "- *Phishing Probability:* An email with phishing probability of 50% or more is classified as phishing.\n"
         "- *Filename Analysis:* If attachments and their filenames are provided, filename analysis will provide recommendations depending on if the filename seems malicious or not."
+        "- *Read More:* For advanced users. If a email is detected as phishing, the read more dropdown that appears provides more information on phishing techniques."
     )
 
     st.divider()
     st.header("Disclaimers")
     st.markdown(
-        "- *No Guarantees:* Results are informational and do not guarantee an email is safe or malicious.\n"
-        "- *Placeholder:* External lookups (such as VirusTotal or MITRE data) may be incomplete or unavailable.\n"
+        "- *No Guarantees:* Results are informational and do not guarantee an email is safe or malicious. Users should always use their own judgement before interacting with an email.\n"
+        "- *External Connections:* External lookups (such as VirusTotal or MITRE data) may be incomplete or unavailable.\n"
         "- *Placeholder:* Avoid pasting sensitive personal, credential, or confidential data into the tool."
     )
     
