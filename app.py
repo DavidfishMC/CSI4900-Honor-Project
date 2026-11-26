@@ -95,14 +95,9 @@ def classify_email(subject, email_body, contains_attachment, attachment_type, da
     X_raw_combined = pd.concat([df_s.reset_index(drop=True), b_df], axis=1)
 
     if hasattr(selector, "feature_names_in_"):
-        expected = list(selector.feature_names_in_)
-        actual = list(X_raw_combined.columns)
-        missing = [c for c in expected if c not in X_raw_combined.columns]
-        extra = [c for c in actual if c not in expected]
-        print(f"Expected count: {len(expected)}, Actual count: {len(actual)}")
-        print(f"Missing ({len(missing)}): {missing[:10]}")
-        print(f"Extra ({len(extra)}): {extra[:10]}")
-        X_raw_combined = X_raw_combined.reindex(columns=expected, fill_value=0)
+        X_raw_combined = X_raw_combined.reindex(
+            columns=list(selector.feature_names_in_), fill_value=0
+        )
     else:
         X_raw_combined = X_raw_combined.reindex(columns=all_cols, fill_value=0)
 
