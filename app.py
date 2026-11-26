@@ -8,6 +8,7 @@ import base64
 import requests
 import torch
 import os
+import glob
 from transformers import DistilBertModel, DistilBertTokenizer
 from difflib import SequenceMatcher
 from transformers import AutoModel, AutoTokenizer
@@ -549,12 +550,6 @@ SAMPLES = {
     "Normal email": "Hey, are we still on for lunch tomorrow? "
                     "I'll book the table for noon.",
 }
-
-@st.cache_resource
-def load_model():
-    return joblib.load('phishing_ensemble_model.pkl')
-
-model = load_model()
 
 subject = st.text_input("Enter Email Subject Line", placeholder="e.g., URGENT: Verify your account")
 email_body = st.text_area("Enter Email Content", height=220, placeholder="Paste the text of the email body here. Emails with little text (< 5 words) will not provide effective analysis.")
