@@ -10,22 +10,53 @@ import torch
 import os
 from transformers import DistilBertModel, DistilBertTokenizer
 from difflib import SequenceMatcher
+from transformers import AutoModel, AutoTokenizer
+
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def assemble_weights(model_dir: str = APP_DIR, out_filename: str = "model.safetensors") -> str:
+    out_path = os.path.join(model_dir, out_filename)
+    part_paths = sorted(
+        glob.glob(os.path.join(model_dir, f"{out_filename}.part*")),
+        key=lambda p: int(p.rsplit(".part", 1)[-1])
+    )
+
+    if part_paths:
+        expected_size = sum(os.path.getsize(p) for p in part_paths)
+        if not os.path.exists(out_path) or os.path.getsize(out_path) != expected_size:
+            temp_path = out_path + ".tmp"
+            with open(temp_path, "wb") as out:
+                for p in part_paths:
+                    with open(p, "rb") as inp:
+                        while True:
+                            buf = inp.read(1024 * 1024 * 8)
+                            if not buf:
+                                break
+                            out.write(buf)
+            os.replace(temp_path, out_path)
+
+    if not os.path.exists(out_path):
+        raise FileNotFoundError(f"Missing {out_path} and no split part files found in {model_dir}.")
+
+    return out_path
 
 @st.cache_resource
 def load_artifacts():
-    model = joblib.load('phishing_ensemble_model.pkl')
-    selector = joblib.load('selector.pkl')
-    selector_mi = joblib.load('selector_mi.pkl')
-    all_cols = pd.read_csv("x_columns_only.csv", nrows=0).columns
-    
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
-    b_model = DistilBertModel.from_pretrained('distilbert-base-uncased').to(device)
-    b_model.eval()
-    
-    return model, selector, selector_mi, all_cols, tokenizer, b_model, device
+    model = joblib.load(os.path.join(APP_DIR, "phishing_ensemble_model.pkl"))
+    selector = joblib.load(os.path.join(APP_DIR, "selector.pkl"))
+    selector_mi = joblib.load(os.path.join(APP_DIR, "selector_mi.pkl"))
+    all_cols = pd.read_csv(os.path.join(APP_DIR, "x_columns_only.csv"), nrows=0).columns
 
-model, selector, selector_mi, all_cols, tokenizer, b_model, device = load_artifacts()
+    assemble_weights(APP_DIR, "model.safetensors")
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    tokenizer = AutoTokenizer.from_pretrained(APP_DIR)
+    ft_model = AutoModel.from_pretrained(APP_DIR).to(device)
+    ft_model.eval()
+
+    return model, selector, selector_mi, all_cols, tokenizer, ft_model, device
+
+model, selector, selector_mi, all_cols, tokenizer, ft_model, device = load_artifacts()
 
 def classify_email(subject, email_body, contains_attachment, attachment_type, day_of_week, hour, device_type, email_client):
     # Calculate text metrics dynamically
@@ -48,24 +79,26 @@ def classify_email(subject, email_body, contains_attachment, attachment_type, da
     }
 
     df_s = pd.get_dummies(pd.DataFrame([sample]), drop_first=True)
-    tabular_cols = [c for c in all_cols if not c.startswith("bert_")]
+    tabular_cols = [c for c in all_cols if not c.startswith(("bert_", "ft_bert_"))]
     df_s = df_s.reindex(columns=tabular_cols, fill_value=0)
 
-    text = [(subject + " " + email_body)]
-    inputs = tokenizer(text, padding=True, truncation=True, max_length=128, return_tensors="pt").to(device)
+    text = [(subject + " " + email_body).strip()]
+    inputs = tokenizer(
+        text, padding=True, truncation=True, max_length=256, return_tensors="pt"
+    ).to(device)
     with torch.no_grad():
-        b_emb = b_model(**inputs).last_hidden_state[:, 0, :].cpu().numpy()
+        b_emb = ft_model(**inputs).last_hidden_state[:, 0, :].cpu().numpy()
 
-    b_df = pd.DataFrame(b_emb, columns=[f"bert_{i}" for i in range(768)])
+    b_df = pd.DataFrame(b_emb, columns=[f"ft_bert_{i}" for i in range(b_emb.shape[1])])
 
     X_raw_combined = pd.concat([df_s.reset_index(drop=True), b_df], axis=1)
     X_raw_combined = X_raw_combined.reindex(columns=all_cols, fill_value=0)
 
-    X_var_filtered = selector.transform(X_raw_combined) 
-    X_sample = selector_mi.transform(X_var_filtered)         
+    X_var_filtered = selector.transform(X_raw_combined)
+    X_sample = selector_mi.transform(X_var_filtered)
 
     probs = model.predict_proba(X_sample)[0]
-    return probs[1] # Phishing probability
+    return probs[1]
 
 def check_virustotal_links(urls):
     """Returns (confirmed_malicious, had_error).
