@@ -553,14 +553,14 @@ st.markdown(
     <style>
         [data-testid="stAppViewContainer"],
         .stApp {
-            background-color: #cbd2dc !important;
+            background-color: #e9edf2 !important;
         }
         [data-testid="stHeader"] {
-            background-color: rgba(203, 210, 220, 0.9) !important;
+            background-color: rgba(233, 237, 242, 0.85) !important;
         }
         [data-testid="stSidebar"] {
-            background-color: #eef1f5 !important;
-            border-right: 1px solid #b8c1ce !important;
+            background-color: #f5f7fa !important;
+            border-right: 1px solid #d8dee6 !important;
         }
         .block-container {
             padding-top: 2rem;
