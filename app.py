@@ -12,6 +12,9 @@ import glob
 from transformers import DistilBertModel, DistilBertTokenizer
 from difflib import SequenceMatcher
 from transformers import AutoModel, AutoTokenizer
+import tempfile
+from email import policy
+from email.parser import BytesParser
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -549,29 +552,27 @@ st.markdown(
     """
     <style>
         [data-testid="stAppViewContainer"] {
-            background-color: #e9edf2;
+            background-color: #cbd2dc !important;
         }
         [data-testid="stHeader"] {
-            background-color: rgba(233, 237, 242, 0.85);
+            background-color: rgba(203, 210, 220, 0.9) !important;
         }
         [data-testid="stSidebar"] {
-            background-color: #f5f7fa;
-            border-right: 1px solid #d8dee6;
+            background-color: #eef1f5 !important;
+            border-right: 1px solid #b8c1ce !important;
         }
         .block-container {
             padding-top: 2rem;
             padding-bottom: 2.5rem;
             max-width: 1180px;
         }
-
-        /* Force solid white card & remove border */
         [data-testid="stVerticalBlockBorderWrapper"] {
             background-color: #ffffff !important;
             border: none !important;
             outline: none !important;
             border-radius: 16px !important;
             padding: 1.25rem 1.4rem !important;
-            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04) !important;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06) !important;
             margin-bottom: 1rem;
         }
         [data-testid="stVerticalBlockBorderWrapper"] > div,
@@ -582,8 +583,6 @@ st.markdown(
             outline: none !important;
             box-shadow: none !important;
         }
-
-        /* Inset inputs */
         [data-testid="stTextInput"] input,
         [data-testid="stTextArea"] textarea {
             background-color: #f3f5f8;
@@ -594,8 +593,6 @@ st.markdown(
             background-color: #f3f5f8;
             border-radius: 10px;
         }
-
-        /* Required red asterisk label */
         .req-label {
             font-size: 0.875rem;
             font-weight: 400;
@@ -607,8 +604,6 @@ st.markdown(
             color: #d93025;
             font-weight: 600;
         }
-
-        /* Empty results placeholder blends directly into the white card */
         .empty-results-box {
             background-color: transparent !important;
             border: none !important;
@@ -652,54 +647,149 @@ SAMPLES = {
                     "I'll book the table for noon.",
 }
 
+def save_and_parse_eml(uploaded_file):
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".eml") as tmp:
+            tmp.write(uploaded_file.getvalue())
+            tmp_path = tmp.name
+
+        with open(tmp_path, "rb") as f:
+            msg = BytesParser(policy=policy.default).parse(f)
+
+        parsed_subject = (msg.get("subject") or "").strip()
+
+        from_header = msg.get("from") or ""
+        parsed_domain = ""
+        if "@" in from_header:
+            parsed_domain = from_header.split("@")[-1].strip().strip(">").strip()
+
+        body_parts = []
+        parsed_attachments = []
+
+        if msg.is_multipart():
+            for part in msg.walk():
+                disposition = part.get_content_disposition()
+                filename = part.get_filename()
+                if disposition == "attachment" or filename:
+                    if filename:
+                        parsed_attachments.append(filename.strip())
+                    continue
+                ctype = part.get_content_type()
+                if ctype == "text/plain":
+                    try:
+                        body_parts.append(part.get_content())
+                    except Exception:
+                        pass
+                elif ctype == "text/html" and not body_parts:
+                    try:
+                        html_txt = re.sub(r"<[^>]+>", " ", part.get_content())
+                        body_parts.append(re.sub(r"\s+", " ", html_txt).strip())
+                    except Exception:
+                        pass
+        else:
+            try:
+                body_parts.append(msg.get_content())
+            except Exception:
+                pass
+
+        parsed_body = "\n".join(p.strip() for p in body_parts if p and p.strip()).strip()
+        return parsed_subject, parsed_body, parsed_domain, parsed_attachments
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
+
 def req_label(text: str):
     st.markdown(
         f'<div class="req-label">{text} <span class="req-star">*</span></div>',
         unsafe_allow_html=True,
     )
 
+
 with st.container(border=True):
     st.subheader("Email Inputs")
 
-    req_label("Enter Email Subject Line")
-    subject = st.text_input(
-        "Enter Email Subject Line",
-        placeholder="e.g., URGENT: Verify your account",
+    input_mode = st.radio(
+        "Input Method",
+        ["Manual Input", "Drag & Drop"],
+        horizontal=True,
         label_visibility="collapsed",
     )
 
-    req_label("Enter Email Content")
-    email_body = st.text_area(
-        "Enter Email Content",
-        height=220,
-        placeholder="Paste the text of the email body here. Emails with little text (< 5 words) will not provide effective analysis.",
-        label_visibility="collapsed",
-    )
+    subject = ""
+    email_body = ""
+    sender_domain = ""
+    eml_attachments = []
 
-    sender_domain = st.text_input(
-        "Sender Email Domain (Optional)",
-        placeholder="e.g. paypa1-secure.com",
-    )
+    if input_mode == "Manual Input":
+        req_label("Enter Email Subject Line")
+        subject = st.text_input(
+            "Enter Email Subject Line",
+            placeholder="e.g., URGENT: Verify your account",
+            label_visibility="collapsed",
+        )
+
+        req_label("Enter Email Content")
+        email_body = st.text_area(
+            "Enter Email Content",
+            height=220,
+            placeholder="Paste the text of the email body here. Emails with little text (< 5 words) will not provide effective analysis.",
+            label_visibility="collapsed",
+        )
+
+        sender_domain = st.text_input(
+            "Sender Email Domain (Optional)",
+            placeholder="e.g. paypa1-secure.com",
+        )
+    else:
+        req_label("Upload .eml File")
+        uploaded_eml = st.file_uploader(
+            "Upload .eml File",
+            type=["eml"],
+            label_visibility="collapsed",
+        )
+        if uploaded_eml is not None:
+            subject, email_body, sender_domain, eml_attachments = save_and_parse_eml(uploaded_eml)
+            st.caption(
+                f"Loaded `{uploaded_eml.name}` — Subject: **{subject or '(none)'}** | "
+                f"Sender domain: **{sender_domain or '(none)'}** | "
+                f"Attachments found: **{len(eml_attachments)}**"
+            )
+
     email = f"Subject: {subject}\n\n{email_body}" if subject else email_body
 
     contains_attachment = st.toggle(
-        "Email contains a File Attachment"
+        "Email contains a File Attachment",
+        value=bool(eml_attachments) if input_mode == "Drag & Drop" else False,
     )
 
     attachment_type = "None"
     attachment_filenames = []
 
     if contains_attachment:
+        default_att_names = "\n".join(eml_attachments) if (input_mode == "Drag & Drop" and eml_attachments) else ""
+        default_att_type = "pdf"
+        if eml_attachments:
+            ext = os.path.splitext(eml_attachments[0])[1].lower().lstrip(".")
+            if ext in ["pdf", "docx", "zip", "exe"]:
+                default_att_type = ext
+
         req_label("Provide the file type for one of the Attachment(s)")
         attachment_type = st.selectbox(
             "Provide the file type for one of the Attachment(s)",
             ["pdf", "docx", "zip", "exe"],
+            index=["pdf", "docx", "zip", "exe"].index(default_att_type),
             label_visibility="collapsed",
         )
 
         req_label("Attachment Filenames (One Per Line)")
         filenames_input = st.text_area(
             "Attachment Filenames (One Per Line)",
+            value=default_att_names,
             placeholder="Invoice.pdf.exe\nPayment_Confirmation.zip\nReport.docx",
             height=100,
             help="Enter the attachment names exactly as they appear in the email.",
