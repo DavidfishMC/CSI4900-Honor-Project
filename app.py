@@ -644,9 +644,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-with st.container(border=True, key="card_results"):
+with st.container(border=True, key="card_header"):
     st.title("🎣 Phishing Email Detector")
-    st.caption("Think your email might be phishing? Input the email's information in the provided fields to find out!")
+    st.caption(
+        "Think your email might be phishing? Input the email's information in the provided fields to find out!"
+    )
 
 SAMPLES = {
     "Fake bank alert": "URGENT: Your account suspended. Verify your account now: "
@@ -657,6 +659,7 @@ SAMPLES = {
     "Normal email": "Hey, are we still on for lunch tomorrow? "
                     "I'll book the table for noon.",
 }
+
 
 def save_and_parse_eml(uploaded_file):
     tmp_path = None
@@ -721,7 +724,7 @@ def req_label(text: str):
     )
 
 
-with st.container(border=True, key="card_results"):
+with st.container(border=True, key="card_inputs"):
     st.subheader("Email Inputs")
 
     input_mode = st.radio(
@@ -853,6 +856,7 @@ with st.container(border=True, key="card_results"):
             label_visibility="collapsed",
         )
 
+
 def result_bar(p_phish: float, title: str = None):
     p_phish = max(0.0, min(1.0, p_phish))
     phish_pct = p_phish * 100
@@ -862,7 +866,7 @@ def result_bar(p_phish: float, title: str = None):
                  else f"{legit_pct:.1f}% Legitimacy Probability")
     st.markdown(f"### {title}")
     st.markdown(
-f"""<div style="display:flex;height:26px;border-radius:8px;overflow:hidden;">
+        f"""<div style="display:flex;height:26px;border-radius:8px;overflow:hidden;">
 <div style="width:{legit_pct:.1f}%;background:#1e8e3e;"></div>
 <div style="width:{phish_pct:.1f}%;background:#d93025;"></div>
 </div>
@@ -871,6 +875,7 @@ f"""<div style="display:flex;height:26px;border-radius:8px;overflow:hidden;">
 </div>""",
         unsafe_allow_html=True,
     )
+
 
 def render_empty_results_placeholder(validation_msg: str = None):
     if validation_msg:
@@ -885,6 +890,7 @@ def render_empty_results_placeholder(validation_msg: str = None):
         """,
         unsafe_allow_html=True,
     )
+
 
 REVIEW_THRESHOLD = 0.35   # placeholder; tune after the calibration work
 
@@ -923,7 +929,6 @@ with st.container(border=True, key="card_results"):
         domain_hits, domain_error = check_virustotal_domain(domain) if domain else (0, False)
         domain_flagged = domain_hits >= MIN_MALICIOUS_ENGINES
 
-        # The model's own prediction is always computed; filenames never touch it.
         phishing_prob = classify_email(
             subject, email_body, contains_attachment, attachment_type,
             day_of_week, hour, device_type, email_client
@@ -932,7 +937,6 @@ with st.container(border=True, key="card_results"):
         vt_confirmed = vt_flagged or domain_flagged
         is_flagged = vt_confirmed or phishing_prob >= 0.5
 
-        # 1) VirusTotal-confirmed threat overrides the model
         if vt_confirmed:
             st.error("**Threat detected:** VirusTotal flagged at least one of this email's links or sender domain as malicious.")
             result_bar(1.0, title="Flagged as malicious by VirusTotal")
@@ -943,8 +947,6 @@ with st.container(border=True, key="card_results"):
                 f"The email classifier's independent prediction was "
                 f"{phishing_prob * 100:.1f}% phishing. VirusTotal findings takes priority."
             )
-
-        # 2) Otherwise the model decides
         elif phishing_prob >= 0.5:
             st.error("Warning: Potential Phishing Detected")
             result_bar(phishing_prob)
@@ -956,13 +958,11 @@ with st.container(border=True, key="card_results"):
             result_bar(phishing_prob)
             st.caption("This is not a guarantee the email is safe. The lack of VirusTotal detections doesn't guarantee safety.")
 
-        # Lookalike note (advisory only, no verdict change)
         if domain and not domain_flagged:
             brand = lookalike_brand(domain)
             if brand:
                 st.info(f"The sender domain {defang_domain(domain)} resembles '{brand}'. Verify it independently.")
 
-        # 3) Attachment filename advice, below the verdict, advisory only
         if contains_attachment:
             if attachment_results:
                 show_attachment_results(attachment_results)
@@ -977,7 +977,6 @@ with st.container(border=True, key="card_results"):
         if link_error:
             st.warning("VirusTotal couldn't check some links (rate limit or network issue).")
 
-        # 4) MITRE only when the email was actually flagged
         if is_flagged:
             with st.expander("Read More - How was this email analyzed?"):
                 findings = build_findings(
