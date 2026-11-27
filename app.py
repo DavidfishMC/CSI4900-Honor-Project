@@ -543,9 +543,77 @@ def extract_features(subject, body, has_attachment, att_type, day, hr, device, c
     
     return sample
 
-st.set_page_config(page_title="Phishing Email Detector", page_icon="🎣")
-st.title("🎣 Phishing Email Detector")
-st.caption("Think your email might be phishing? Input the email's information in the provided fields to find out!")
+st.set_page_config(page_title="Phishing Email Detector", page_icon="🎣", layout="wide")
+
+st.markdown(
+    """
+    <style>
+        [data-testid="stAppViewContainer"] {
+            background-color: #e9edf2;
+        }
+        [data-testid="stHeader"] {
+            background-color: rgba(233, 237, 242, 0.85);
+        }
+        [data-testid="stSidebar"] {
+            background-color: #f5f7fa;
+            border-right: 1px solid #d8dee6;
+        }
+        .block-container {
+            padding-top: 2rem;
+            padding-bottom: 2.5rem;
+            max-width: 1180px;
+        }
+        [data-testid="stVerticalBlockBorderWrapper"] {
+            background-color: #ffffff;
+            border: 1px solid #d8dee6 !important;
+            border-radius: 16px !important;
+            padding: 1.25rem 1.4rem !important;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+            margin-bottom: 1rem;
+        }
+        [data-testid="stTextInput"] input,
+        [data-testid="stTextArea"] textarea {
+            background-color: #f3f5f8;
+            border: 1px solid #dfe4ec;
+            border-radius: 10px;
+        }
+        [data-testid="stSelectbox"] > div > div {
+            background-color: #f3f5f8;
+            border-radius: 10px;
+        }
+        .empty-results-box {
+            background-color: #f8f9fb;
+            border: 1px dashed #cfd6e0;
+            border-radius: 12px;
+            padding: 2.25rem 1.5rem;
+            text-align: center;
+            color: #4b5563;
+            margin-top: 0.75rem;
+        }
+        .empty-results-icon {
+            font-size: 2rem;
+            line-height: 1;
+            margin-bottom: 0.6rem;
+        }
+        .empty-results-title {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 0.3rem;
+        }
+        .empty-results-sub {
+            font-size: 0.9rem;
+            color: #6b7280;
+            margin: 0;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+with st.container(border=True):
+    st.title("🎣 Phishing Email Detector")
+    st.caption("Think your email might be phishing? Input the email's information in the provided fields to find out!")
 
 SAMPLES = {
     "Fake bank alert": "URGENT: Your account suspended. Verify your account now: "
@@ -557,72 +625,57 @@ SAMPLES = {
                     "I'll book the table for noon.",
 }
 
-subject = st.text_input("Enter Email Subject Line", placeholder="e.g., URGENT: Verify your account")
-email_body = st.text_area("Enter Email Content", height=220, placeholder="Paste the text of the email body here. Emails with little text (< 5 words) will not provide effective analysis.")
-sender_domain = st.text_input("Sender Email Domain (Optional)", placeholder="e.g. paypa1-secure.com")
-email = f"Subject: {subject}\n\n{email_body}" if subject else email_body
+with st.container(border=True):
+    subject = st.text_input("Enter Email Subject Line", placeholder="e.g., URGENT: Verify your account")
+    email_body = st.text_area("Enter Email Content", height=220, placeholder="Paste the text of the email body here. Emails with little text (< 5 words) will not provide effective analysis.")
+    sender_domain = st.text_input("Sender Email Domain (Optional)", placeholder="e.g. paypa1-secure.com")
+    email = f"Subject: {subject}\n\n{email_body}" if subject else email_body
 
-
-contains_attachment = st.toggle(
-    "Email contains a File Attachment"
-)
-
-attachment_type = "None"
-attachment_filenames = []
-
-if contains_attachment:
-    attachment_type = st.selectbox(
-        "Provide the file type for one of the Attachment(s)",
-        ["pdf", "docx", "zip", "exe"]
+    contains_attachment = st.toggle(
+        "Email contains a File Attachment"
     )
 
-    filenames_input = st.text_area(
-        "Attachment Filenames (One Per Line)",
-        placeholder="Invoice.pdf.exe\nPayment_Confirmation.zip\nReport.docx",
-        height=100,
-        help="Enter the attachment names exactly as they appear in the email."
-    )
+    attachment_type = "None"
+    attachment_filenames = []
 
-    attachment_filenames = [
-        name.strip()
-        for name in filenames_input.splitlines()
-        if name.strip()
-    ]
+    if contains_attachment:
+        attachment_type = st.selectbox(
+            "Provide the file type for one of the Attachment(s)",
+            ["pdf", "docx", "zip", "exe"]
+        )
 
+        filenames_input = st.text_area(
+            "Attachment Filenames (One Per Line)",
+            placeholder="Invoice.pdf.exe\nPayment_Confirmation.zip\nReport.docx",
+            height=100,
+            help="Enter the attachment names exactly as they appear in the email."
+        )
 
-hour_options = {
-    "12:00 AM (Midnight)": 0, "1:00 AM": 1, "2:00 AM": 2, "3:00 AM": 3,
-    "4:00 AM": 4, "5:00 AM": 5, "6:00 AM": 6, "7:00 AM": 7,
-    "8:00 AM": 8, "9:00 AM": 9, "10:00 AM": 10, "11:00 AM": 11,
-    "12:00 PM (Noon)": 12, "1:00 PM": 13, "2:00 PM": 14, "3:00 PM": 15,
-    "4:00 PM": 16, "5:00 PM": 17, "6:00 PM": 18, "7:00 PM": 19,
-    "8:00 PM": 20, "9:00 PM": 21, "10:00 PM": 22, "11:00 PM": 23
-}
+        attachment_filenames = [
+            name.strip()
+            for name in filenames_input.splitlines()
+            if name.strip()
+        ]
 
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    day_of_week = st.selectbox("Day of Week Sent", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]) 
-with col2:
-    selected_hour_label = st.selectbox("Hour Sent", list(hour_options.keys()))
-    hour = hour_options[selected_hour_label]
-with col3:
-    device_type = st.selectbox("Device Received On", ["Laptop", "Desktop", "Mobile", "Tablet"])
-with col4:
-    email_client = st.selectbox("Email Client Received On", ["Thunderbird", "Gmail", "Apple Mail", "Yahoo Mail", "Outlook"])
+    hour_options = {
+        "12:00 AM (Midnight)": 0, "1:00 AM": 1, "2:00 AM": 2, "3:00 AM": 3,
+        "4:00 AM": 4, "5:00 AM": 5, "6:00 AM": 6, "7:00 AM": 7,
+        "8:00 AM": 8, "9:00 AM": 9, "10:00 AM": 10, "11:00 AM": 11,
+        "12:00 PM (Noon)": 12, "1:00 PM": 13, "2:00 PM": 14, "3:00 PM": 15,
+        "4:00 PM": 16, "5:00 PM": 17, "6:00 PM": 18, "7:00 PM": 19,
+        "8:00 PM": 20, "9:00 PM": 21, "10:00 PM": 22, "11:00 PM": 23
+    }
 
-btn_col, msg_col = st.columns([1, 2])
-
-with btn_col:
-    analyze_clicked = st.button("Analyze Email", type="primary")
-
-with msg_col:
-    if analyze_clicked:
-        if not subject.strip() and not email_body.strip():
-            st.error("⚠️ Please enter a subject line and email content, and double-check your other inputs!")
-        elif not subject.strip():
-            st.error("⚠️ Please enter a subject line, and double-check your other inputs!")
-        elif not email_body.strip():
-            st.error("⚠️ Please enter email content, and double-check your other inputs!")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        day_of_week = st.selectbox("Day of Week Sent", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
+    with col2:
+        selected_hour_label = st.selectbox("Hour Sent", list(hour_options.keys()))
+        hour = hour_options[selected_hour_label]
+    with col3:
+        device_type = st.selectbox("Device Received On", ["Laptop", "Desktop", "Mobile", "Tablet"])
+    with col4:
+        email_client = st.selectbox("Email Client Received On", ["Thunderbird", "Gmail", "Apple Mail", "Yahoo Mail", "Outlook"])
 
 def result_bar(p_phish: float, title: str = None):
     p_phish = max(0.0, min(1.0, p_phish))
@@ -643,100 +696,124 @@ f"""<div style="display:flex;height:26px;border-radius:8px;overflow:hidden;">
         unsafe_allow_html=True,
     )
 
-REVIEW_THRESHOLD = 0.35   # placeholder; tune after the calibration work
-
-if analyze_clicked and subject.strip() and email_body.strip():
-    combined_text = f"{subject} {email_body}"
-    extracted_urls = [
-        u.rstrip(".,;:)]}>\"'")
-        for u in re.findall(r'https?://[^\s]+|www\.[^\s]+', combined_text)
-    ]
-
-    attachment_results = [
-        analyze_attachment_filename(name)
-        for name in attachment_filenames
-    ]
-
-    if extracted_urls:
-        vt_flagged, link_error = check_virustotal_links(extracted_urls[:5])
-    else:
-        vt_flagged, link_error = False, False
-
-    domain = normalize_domain(sender_domain) if sender_domain.strip() else None
-    if sender_domain.strip() and domain is None:
-        st.warning("The provided sender domain doesn't look like a valid domain. The sender-domain check was skipped.")
-    domain_hits, domain_error = check_virustotal_domain(domain) if domain else (0, False)
-    domain_flagged = domain_hits >= MIN_MALICIOUS_ENGINES
-
-    # The model's own prediction is always computed; filenames never touch it.
-    phishing_prob = classify_email(
-        subject, email_body, contains_attachment, attachment_type,
-        day_of_week, hour, device_type, email_client
+def render_empty_results_placeholder(validation_msg: str = None):
+    if validation_msg:
+        st.error(validation_msg)
+    st.markdown(
+        """
+        <div class="empty-results-box">
+            <div class="empty-results-icon">✉️</div>
+            <div class="empty-results-title">No Analysis Performed Yet</div>
+            <p class="empty-results-sub">Click <strong>Analyze Email</strong> above to check the email for phishing indicators and view results here.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-    vt_confirmed = vt_flagged or domain_flagged
-    is_flagged = vt_confirmed or phishing_prob >= 0.5
+REVIEW_THRESHOLD = 0.35   # placeholder; tune after the calibration work
 
+with st.container(border=True):
     st.subheader("Analysis Results")
+    analyze_clicked = st.button("Analyze Email", type="primary")
 
-    # 1) VirusTotal-confirmed threat overrides the model
-    if vt_confirmed:
-        st.error("**Threat detected:** VirusTotal flagged at least one of this email's links or sender domain as malicious.")
-        result_bar(1.0, title="Flagged as malicious by VirusTotal")
-        if domain_flagged:
-            st.error(f"**This sender domain is malicious.** Flagged by {domain_hits} security engines.")
-            st.code(defang_domain(domain), language=None)
-        st.caption(
-            f"The email classifier's independent prediction was "
-            f"{phishing_prob * 100:.1f}% phishing. VirusTotal findings takes priority."
+    if not analyze_clicked:
+        render_empty_results_placeholder()
+    elif not subject.strip() and not email_body.strip():
+        render_empty_results_placeholder("⚠️ Please enter a subject line and email content, and double-check your other inputs!")
+    elif not subject.strip():
+        render_empty_results_placeholder("⚠️ Please enter a subject line, and double-check your other inputs!")
+    elif not email_body.strip():
+        render_empty_results_placeholder("⚠️ Please enter email content, and double-check your other inputs!")
+    else:
+        combined_text = f"{subject} {email_body}"
+        extracted_urls = [
+            u.rstrip(".,;:)]}>\"'")
+            for u in re.findall(r'https?://[^\s]+|www\.[^\s]+', combined_text)
+        ]
+
+        attachment_results = [
+            analyze_attachment_filename(name)
+            for name in attachment_filenames
+        ]
+
+        if extracted_urls:
+            vt_flagged, link_error = check_virustotal_links(extracted_urls[:5])
+        else:
+            vt_flagged, link_error = False, False
+
+        domain = normalize_domain(sender_domain) if sender_domain.strip() else None
+        if sender_domain.strip() and domain is None:
+            st.warning("The provided sender domain doesn't look like a valid domain. The sender-domain check was skipped.")
+        domain_hits, domain_error = check_virustotal_domain(domain) if domain else (0, False)
+        domain_flagged = domain_hits >= MIN_MALICIOUS_ENGINES
+
+        # The model's own prediction is always computed; filenames never touch it.
+        phishing_prob = classify_email(
+            subject, email_body, contains_attachment, attachment_type,
+            day_of_week, hour, device_type, email_client
         )
 
-    # 2) Otherwise the model decides
-    elif phishing_prob >= 0.5:
-        st.error("Warning: Potential Phishing Detected")
-        result_bar(phishing_prob)
-    elif phishing_prob >= REVIEW_THRESHOLD:
-        st.warning("Inconclusive: The model leans legitimate but isn't confident. Review this email manually.")
-        result_bar(phishing_prob)
-    else:
-        st.success("No phishing detected by the model")
-        result_bar(phishing_prob)
-        st.caption("This is not a guarantee the email is safe. The lack of VirusTotal detections doesn't guarantee safety.")
+        vt_confirmed = vt_flagged or domain_flagged
+        is_flagged = vt_confirmed or phishing_prob >= 0.5
 
-    # Lookalike note (advisory only, no verdict change)
-    if domain and not domain_flagged:
-        brand = lookalike_brand(domain)
-        if brand:
-            st.info(f"The sender domain {defang_domain(domain)} resembles '{brand}'. Verify it independently.")
+        # 1) VirusTotal-confirmed threat overrides the model
+        if vt_confirmed:
+            st.error("**Threat detected:** VirusTotal flagged at least one of this email's links or sender domain as malicious.")
+            result_bar(1.0, title="Flagged as malicious by VirusTotal")
+            if domain_flagged:
+                st.error(f"**This sender domain is malicious.** Flagged by {domain_hits} security engines.")
+                st.code(defang_domain(domain), language=None)
+            st.caption(
+                f"The email classifier's independent prediction was "
+                f"{phishing_prob * 100:.1f}% phishing. VirusTotal findings takes priority."
+            )
 
-    # 3) Attachment filename advice, below the verdict, advisory only
-    if contains_attachment:
-        if attachment_results:
-            show_attachment_results(attachment_results)
+        # 2) Otherwise the model decides
+        elif phishing_prob >= 0.5:
+            st.error("Warning: Potential Phishing Detected")
+            result_bar(phishing_prob)
+        elif phishing_prob >= REVIEW_THRESHOLD:
+            st.warning("Inconclusive: The model leans legitimate but isn't confident. Review this email manually.")
+            result_bar(phishing_prob)
         else:
-            st.info(
-                "An attachment was reported, but no filename was provided. "
-                "Filename analysis was skipped."
-            )
+            st.success("No phishing detected by the model")
+            result_bar(phishing_prob)
+            st.caption("This is not a guarantee the email is safe. The lack of VirusTotal detections doesn't guarantee safety.")
 
-    if domain_error:
-        st.warning("VirusTotal couldn't check the sender domain (rate limit or network issue).")
-    if link_error:
-        st.warning("VirusTotal couldn't check some links (rate limit or network issue).")
+        # Lookalike note (advisory only, no verdict change)
+        if domain and not domain_flagged:
+            brand = lookalike_brand(domain)
+            if brand:
+                st.info(f"The sender domain {defang_domain(domain)} resembles '{brand}'. Verify it independently.")
 
-    # 4) MITRE only when the email was actually flagged
-    if is_flagged:
-        with st.expander("Read More - How was this email analyzed?"):
-            findings = build_findings(
-                combined_text,
-                extracted_urls,
-                contains_attachment,
-                attachment_type,
-                domain,
-                domain_hits,
-                attachment_results
-            )
-            show_attack_section(findings)
+        # 3) Attachment filename advice, below the verdict, advisory only
+        if contains_attachment:
+            if attachment_results:
+                show_attachment_results(attachment_results)
+            else:
+                st.info(
+                    "An attachment was reported, but no filename was provided. "
+                    "Filename analysis was skipped."
+                )
+
+        if domain_error:
+            st.warning("VirusTotal couldn't check the sender domain (rate limit or network issue).")
+        if link_error:
+            st.warning("VirusTotal couldn't check some links (rate limit or network issue).")
+
+        # 4) MITRE only when the email was actually flagged
+        if is_flagged:
+            with st.expander("Read More - How was this email analyzed?"):
+                findings = build_findings(
+                    combined_text,
+                    extracted_urls,
+                    contains_attachment,
+                    attachment_type,
+                    domain,
+                    domain_hits,
+                    attachment_results
+                )
+                show_attack_section(findings)
 
 with st.sidebar:
     st.header("User Guide")
