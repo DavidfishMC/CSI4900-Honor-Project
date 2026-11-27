@@ -551,7 +551,8 @@ st.set_page_config(page_title="Phishing Email Detector", page_icon="🎣", layou
 st.markdown(
     """
     <style>
-        [data-testid="stAppViewContainer"] {
+        [data-testid="stAppViewContainer"],
+        .stApp {
             background-color: #cbd2dc !important;
         }
         [data-testid="stHeader"] {
@@ -566,7 +567,9 @@ st.markdown(
             padding-bottom: 2.5rem;
             max-width: 1180px;
         }
-        [data-testid="stVerticalBlockBorderWrapper"] {
+
+        /* Solid white cards with no outline */
+        [class*="st-key-card_"] {
             background-color: #ffffff !important;
             border: none !important;
             outline: none !important;
@@ -575,24 +578,30 @@ st.markdown(
             box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06) !important;
             margin-bottom: 1rem;
         }
-        [data-testid="stVerticalBlockBorderWrapper"] > div,
-        [data-testid="stVerticalBlockBorderWrapper"] > div > div,
-        [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stVerticalBlock"] {
+        [class*="st-key-card_"] > div,
+        [class*="st-key-card_"] [data-testid="stVerticalBlock"],
+        [class*="st-key-card_"] [data-testid="stVerticalBlockBorderWrapper"] {
             background-color: #ffffff !important;
             border: none !important;
             outline: none !important;
             box-shadow: none !important;
         }
+
+        /* Inset inputs */
         [data-testid="stTextInput"] input,
         [data-testid="stTextArea"] textarea {
-            background-color: #f3f5f8;
-            border: 1px solid #dfe4ec;
-            border-radius: 10px;
+            background-color: #f3f5f8 !important;
+            color: #1f2937 !important;
+            border: 1px solid #dfe4ec !important;
+            border-radius: 10px !important;
         }
         [data-testid="stSelectbox"] > div > div {
-            background-color: #f3f5f8;
-            border-radius: 10px;
+            background-color: #f3f5f8 !important;
+            color: #1f2937 !important;
+            border-radius: 10px !important;
         }
+
+        /* Required red asterisk label */
         .req-label {
             font-size: 0.875rem;
             font-weight: 400;
@@ -604,6 +613,8 @@ st.markdown(
             color: #d93025;
             font-weight: 600;
         }
+
+        /* Empty results placeholder blends directly into the white card */
         .empty-results-box {
             background-color: transparent !important;
             border: none !important;
@@ -633,7 +644,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-with st.container(border=True):
+with st.container(border=True, key="card_results"):
     st.title("🎣 Phishing Email Detector")
     st.caption("Think your email might be phishing? Input the email's information in the provided fields to find out!")
 
@@ -710,7 +721,7 @@ def req_label(text: str):
     )
 
 
-with st.container(border=True):
+with st.container(border=True, key="card_results"):
     st.subheader("Email Inputs")
 
     input_mode = st.radio(
@@ -877,7 +888,7 @@ def render_empty_results_placeholder(validation_msg: str = None):
 
 REVIEW_THRESHOLD = 0.35   # placeholder; tune after the calibration work
 
-with st.container(border=True):
+with st.container(border=True, key="card_results"):
     st.subheader("Analysis Results")
     analyze_clicked = st.button("Analyze Email", type="primary")
 
