@@ -564,23 +564,26 @@ st.markdown(
             max-width: 1180px;
         }
 
-        /* White card background + remove border on both outer wrapper and inner block */
-        [data-testid="stVerticalBlockBorderWrapper"],
+        /* Force solid white card & remove border */
+        [data-testid="stVerticalBlockBorderWrapper"] {
+            background-color: #ffffff !important;
+            border: none !important;
+            outline: none !important;
+            border-radius: 16px !important;
+            padding: 1.25rem 1.4rem !important;
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04) !important;
+            margin-bottom: 1rem;
+        }
         [data-testid="stVerticalBlockBorderWrapper"] > div,
+        [data-testid="stVerticalBlockBorderWrapper"] > div > div,
         [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stVerticalBlock"] {
             background-color: #ffffff !important;
             border: none !important;
             outline: none !important;
             box-shadow: none !important;
         }
-        [data-testid="stVerticalBlockBorderWrapper"] {
-            border-radius: 16px !important;
-            padding: 1.25rem 1.4rem !important;
-            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04) !important;
-            margin-bottom: 1rem;
-        }
 
-        /* Keep inset inputs subtle light gray */
+        /* Inset inputs */
         [data-testid="stTextInput"] input,
         [data-testid="stTextArea"] textarea {
             background-color: #f3f5f8;
@@ -590,6 +593,19 @@ st.markdown(
         [data-testid="stSelectbox"] > div > div {
             background-color: #f3f5f8;
             border-radius: 10px;
+        }
+
+        /* Required red asterisk label */
+        .req-label {
+            font-size: 0.875rem;
+            font-weight: 400;
+            color: #31333f;
+            margin-bottom: 0.25rem;
+            line-height: 1.4;
+        }
+        .req-star {
+            color: #d93025;
+            font-weight: 600;
         }
 
         /* Empty results placeholder blends directly into the white card */
@@ -636,10 +652,34 @@ SAMPLES = {
                     "I'll book the table for noon.",
 }
 
+def req_label(text: str):
+    st.markdown(
+        f'<div class="req-label">{text} <span class="req-star">*</span></div>',
+        unsafe_allow_html=True,
+    )
+
 with st.container(border=True):
-    subject = st.text_input("Enter Email Subject Line", placeholder="e.g., URGENT: Verify your account")
-    email_body = st.text_area("Enter Email Content", height=220, placeholder="Paste the text of the email body here. Emails with little text (< 5 words) will not provide effective analysis.")
-    sender_domain = st.text_input("Sender Email Domain (Optional)", placeholder="e.g. paypa1-secure.com")
+    st.subheader("Email Inputs")
+
+    req_label("Enter Email Subject Line")
+    subject = st.text_input(
+        "Enter Email Subject Line",
+        placeholder="e.g., URGENT: Verify your account",
+        label_visibility="collapsed",
+    )
+
+    req_label("Enter Email Content")
+    email_body = st.text_area(
+        "Enter Email Content",
+        height=220,
+        placeholder="Paste the text of the email body here. Emails with little text (< 5 words) will not provide effective analysis.",
+        label_visibility="collapsed",
+    )
+
+    sender_domain = st.text_input(
+        "Sender Email Domain (Optional)",
+        placeholder="e.g. paypa1-secure.com",
+    )
     email = f"Subject: {subject}\n\n{email_body}" if subject else email_body
 
     contains_attachment = st.toggle(
@@ -650,16 +690,20 @@ with st.container(border=True):
     attachment_filenames = []
 
     if contains_attachment:
+        req_label("Provide the file type for one of the Attachment(s)")
         attachment_type = st.selectbox(
             "Provide the file type for one of the Attachment(s)",
-            ["pdf", "docx", "zip", "exe"]
+            ["pdf", "docx", "zip", "exe"],
+            label_visibility="collapsed",
         )
 
+        req_label("Attachment Filenames (One Per Line)")
         filenames_input = st.text_area(
             "Attachment Filenames (One Per Line)",
             placeholder="Invoice.pdf.exe\nPayment_Confirmation.zip\nReport.docx",
             height=100,
-            help="Enter the attachment names exactly as they appear in the email."
+            help="Enter the attachment names exactly as they appear in the email.",
+            label_visibility="collapsed",
         )
 
         attachment_filenames = [
@@ -679,14 +723,34 @@ with st.container(border=True):
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        day_of_week = st.selectbox("Day of Week Sent", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
+        req_label("Day of Week Sent")
+        day_of_week = st.selectbox(
+            "Day of Week Sent",
+            ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+            label_visibility="collapsed",
+        )
     with col2:
-        selected_hour_label = st.selectbox("Hour Sent", list(hour_options.keys()))
+        req_label("Hour Sent")
+        selected_hour_label = st.selectbox(
+            "Hour Sent",
+            list(hour_options.keys()),
+            label_visibility="collapsed",
+        )
         hour = hour_options[selected_hour_label]
     with col3:
-        device_type = st.selectbox("Device Received On", ["Laptop", "Desktop", "Mobile", "Tablet"])
+        req_label("Device Received On")
+        device_type = st.selectbox(
+            "Device Received On",
+            ["Laptop", "Desktop", "Mobile", "Tablet"],
+            label_visibility="collapsed",
+        )
     with col4:
-        email_client = st.selectbox("Email Client Received On", ["Thunderbird", "Gmail", "Apple Mail", "Yahoo Mail", "Outlook"])
+        req_label("Email Client Received On")
+        email_client = st.selectbox(
+            "Email Client Received On",
+            ["Thunderbird", "Gmail", "Apple Mail", "Yahoo Mail", "Outlook"],
+            label_visibility="collapsed",
+        )
 
 def result_bar(p_phish: float, title: str = None):
     p_phish = max(0.0, min(1.0, p_phish))
