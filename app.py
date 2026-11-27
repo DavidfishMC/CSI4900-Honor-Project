@@ -564,8 +564,8 @@ st.markdown(
             max-width: 1180px;
         }
         [data-testid="stVerticalBlockBorderWrapper"] {
-            background-color: #ffffff;
-            border: 1px solid #d8dee6 !important;
+            background-color: #ffffff !important;
+            border: none !important;
             border-radius: 16px !important;
             padding: 1.25rem 1.4rem !important;
             box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
@@ -582,13 +582,12 @@ st.markdown(
             border-radius: 10px;
         }
         .empty-results-box {
-            background-color: #f8f9fb;
-            border: 1px dashed #cfd6e0;
-            border-radius: 12px;
-            padding: 2.25rem 1.5rem;
+            background-color: transparent;
+            border: none;
+            padding: 2rem 1rem;
             text-align: center;
             color: #4b5563;
-            margin-top: 0.75rem;
+            margin-top: 0.5rem;
         }
         .empty-results-icon {
             font-size: 2rem;
