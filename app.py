@@ -563,14 +563,24 @@ st.markdown(
             padding-bottom: 2.5rem;
             max-width: 1180px;
         }
-        [data-testid="stVerticalBlockBorderWrapper"] {
+
+        /* White card background + remove border on both outer wrapper and inner block */
+        [data-testid="stVerticalBlockBorderWrapper"],
+        [data-testid="stVerticalBlockBorderWrapper"] > div,
+        [data-testid="stVerticalBlockBorderWrapper"] [data-testid="stVerticalBlock"] {
             background-color: #ffffff !important;
             border: none !important;
+            outline: none !important;
+            box-shadow: none !important;
+        }
+        [data-testid="stVerticalBlockBorderWrapper"] {
             border-radius: 16px !important;
             padding: 1.25rem 1.4rem !important;
-            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+            box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04) !important;
             margin-bottom: 1rem;
         }
+
+        /* Keep inset inputs subtle light gray */
         [data-testid="stTextInput"] input,
         [data-testid="stTextArea"] textarea {
             background-color: #f3f5f8;
@@ -581,9 +591,11 @@ st.markdown(
             background-color: #f3f5f8;
             border-radius: 10px;
         }
+
+        /* Empty results placeholder blends directly into the white card */
         .empty-results-box {
-            background-color: transparent;
-            border: none;
+            background-color: transparent !important;
+            border: none !important;
             padding: 2rem 1rem;
             text-align: center;
             color: #4b5563;
