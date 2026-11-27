@@ -639,6 +639,13 @@ st.markdown(
             color: #6b7280;
             margin: 0;
         }
+
+        footer,
+        [data-testid="stFooter"],
+        [data-testid="stStatusWidget"] {
+            visibility: hidden !important;
+            display: none !important;
+        }
     </style>
     """,
     unsafe_allow_html=True,
@@ -822,7 +829,7 @@ with st.container(border=True, key="card_inputs"):
         "8:00 AM": 8, "9:00 AM": 9, "10:00 AM": 10, "11:00 AM": 11,
         "12:00 PM (Noon)": 12, "1:00 PM": 13, "2:00 PM": 14, "3:00 PM": 15,
         "4:00 PM": 16, "5:00 PM": 17, "6:00 PM": 18, "7:00 PM": 19,
-        "8:00 PM": 20, "9:00 PM": 21, "10:00 PM": 22, "11:00 PM": 23
+        "8:00 PM": 20, "9:00 PM": 21, "10:00 PM": 22, "11:00 PM": 23,
     }
 
     col1, col2, col3, col4 = st.columns(4)
@@ -862,8 +869,11 @@ def result_bar(p_phish: float, title: str = None):
     phish_pct = p_phish * 100
     legit_pct = 100 - phish_pct
     if title is None:
-        title = (f"{phish_pct:.1f}% Phishing Probability" if p_phish >= 0.5
-                 else f"{legit_pct:.1f}% Legitimacy Probability")
+        title = (
+            f"{phish_pct:.1f}% Phishing Probability"
+            if p_phish >= 0.5
+            else f"{legit_pct:.1f}% Legitimacy Probability"
+        )
     st.markdown(f"### {title}")
     st.markdown(
         f"""<div style="display:flex;height:26px;border-radius:8px;overflow:hidden;">
@@ -892,7 +902,7 @@ def render_empty_results_placeholder(validation_msg: str = None):
     )
 
 
-REVIEW_THRESHOLD = 0.35   # placeholder; tune after the calibration work
+REVIEW_THRESHOLD = 0.35
 
 with st.container(border=True, key="card_results"):
     st.subheader("Analysis Results")
@@ -910,7 +920,7 @@ with st.container(border=True, key="card_results"):
         combined_text = f"{subject} {email_body}"
         extracted_urls = [
             u.rstrip(".,;:)]}>\"'")
-            for u in re.findall(r'https?://[^\s]+|www\.[^\s]+', combined_text)
+            for u in re.findall(r"https?://[^\s]+|www\.[^\s]+", combined_text)
         ]
 
         attachment_results = [
@@ -930,8 +940,14 @@ with st.container(border=True, key="card_results"):
         domain_flagged = domain_hits >= MIN_MALICIOUS_ENGINES
 
         phishing_prob = classify_email(
-            subject, email_body, contains_attachment, attachment_type,
-            day_of_week, hour, device_type, email_client
+            subject,
+            email_body,
+            contains_attachment,
+            attachment_type,
+            day_of_week,
+            hour,
+            device_type,
+            email_client,
         )
 
         vt_confirmed = vt_flagged or domain_flagged
@@ -986,7 +1002,7 @@ with st.container(border=True, key="card_results"):
                     attachment_type,
                     domain,
                     domain_hits,
-                    attachment_results
+                    attachment_results,
                 )
                 show_attack_section(findings)
 
